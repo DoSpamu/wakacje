@@ -5,17 +5,25 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['exceljs'],
   },
-  /**
-   * Resolve .js imports to .ts files in transpiled monorepo packages.
-   * Required because @wakacje/shared uses NodeNext module resolution
-   * (explicit .js extensions) while Next.js/webpack needs .ts files.
-   */
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    // Resolve .js imports to .ts files for @wakacje/shared (NodeNext ESM style)
     config.resolve.extensionAlias = {
       '.js': ['.ts', '.tsx', '.js'],
       '.jsx': ['.tsx', '.jsx'],
       '.mjs': ['.mts', '.mjs'],
     };
+
+    // Node.js built-ins used in shared package (loadScoringConfig) — not needed in browser
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        'fs/promises': false,
+        path: false,
+        url: false,
+      };
+    }
+
     return config;
   },
 };
