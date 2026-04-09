@@ -31,7 +31,7 @@ const COLUMNS = [
   { header: 'Link do oferty', key: 'source_url', width: 60 },
 ];
 
-export async function generateXlsx(offers: OfferRow[]): Promise<Buffer> {
+export async function generateXlsx(offers: OfferRow[]): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Wakacje Aggregator';
   workbook.created = new Date();
@@ -123,7 +123,7 @@ export async function generateXlsx(offers: OfferRow[]): Promise<Buffer> {
     to: { row: 1, column: COLUMNS.length },
   };
 
-  return workbook.xlsx.writeBuffer() as Promise<Buffer>;
+  return workbook.xlsx.writeBuffer() as unknown as Promise<Uint8Array>;
 }
 
 export function generateCsv(offers: OfferRow[]): string {
