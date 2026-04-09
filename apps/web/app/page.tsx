@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import SearchForm from '@/components/SearchForm';
 import OffersTable from '@/components/OffersTable';
+import ScrapeButton from '@/components/ScrapeButton';
 import type { OfferRow, UIFilter } from '@/lib/types';
 
 const DEFAULT_FILTER: UIFilter = {
@@ -121,11 +122,14 @@ export default function HomePage() {
   return (
     <div className="space-y-6">
       {/* Page title */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Szukaj ofert wakacyjnych</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          All-Inclusive z R.pl, Exim Tours, Coral Travel, Itaka, Grecos i TUI
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Szukaj ofert wakacyjnych</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            All-Inclusive z R.pl, Exim Tours, Coral Travel, Itaka, Grecos i TUI
+          </p>
+        </div>
+        <ScrapeButton />
       </div>
 
       {/* Search form */}

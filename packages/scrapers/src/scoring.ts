@@ -55,7 +55,7 @@ function normalizeRating(rating: number | null, scale: number): number {
 /**
  * Log-normalize review count for confidence weight
  */
-function normalizeReviewCount(count: number | null, logBase: number, max: number): number {
+function normalizeReviewCount(count: number | null, _logBase: number, max: number): number {
   if (count === null || count <= 0) return 0;
   return clamp01(Math.log(count + 1) / Math.log(max + 1));
 }

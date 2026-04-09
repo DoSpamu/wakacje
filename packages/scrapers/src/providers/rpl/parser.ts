@@ -165,7 +165,7 @@ async function parseRplCard(card: Locator, sourceUrl: string): Promise<RawOffer 
     const airportText = await getText(RPL_SELECTORS.departureAirport);
 
     // Card itself is an <a> element — get href directly
-    const href = (await card.getAttribute('href')) ?? await getAttr(RPL_SELECTORS.offerLink, 'href');
+    const href = await card.getAttribute('href');
     const offerUrl = href
       ? href.startsWith('http') ? href : `https://r.pl${href}`
       : sourceUrl;
@@ -213,7 +213,7 @@ async function parseRplCard(card: Locator, sourceUrl: string): Promise<RawOffer 
 /** Try to extract offers from structured data (JSON-LD) — faster and more reliable */
 async function parseJsonLd(page: Page): Promise<RawOffer[]> {
   try {
-    const jsonLd = await page.evaluate(() => {
+    await page.evaluate(() => {
       const scripts = document.querySelectorAll('script[type="application/ld+json"]');
       const results: unknown[] = [];
       scripts.forEach((s) => {

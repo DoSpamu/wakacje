@@ -9,7 +9,7 @@
  */
 
 import Fuse from 'fuse.js';
-import type { RawOffer } from '@wakacje/shared';
+import type { RawOffer, BoardType } from '@wakacje/shared';
 
 export interface NormalizedHotel {
   id: string;
@@ -191,10 +191,10 @@ export function generateCanonicalName(offer: RawOffer): string {
 /**
  * Normalize board type string to canonical BoardType
  */
-export function normalizeBoardType(raw: string): RawOffer['boardType'] {
+export function normalizeBoardType(raw: string): BoardType {
   const lower = raw.toLowerCase().trim();
 
-  const matchers: Array<[RegExp, RawOffer['boardType']]> = [
+  const matchers: Array<[RegExp, BoardType]> = [
     [/ultra\s*all[\s-]*inclusive|uai|ultra all in/, 'ultra-all-inclusive'],
     [/all[\s-]*inclusive|all\s*in|ai\b/, 'all-inclusive'],
     [/half[\s-]*board|hb\b|połówka|śniadanie\s*\+\s*kolacja/, 'half-board'],

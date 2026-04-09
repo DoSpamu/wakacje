@@ -224,7 +224,7 @@ export abstract class BaseScraper {
   }
 
   /** Save HTML snapshot for debugging */
-  private async saveSnapshot(page: Page, dir: string, url: string): Promise<void> {
+  private async saveSnapshot(page: Page, dir: string, _url: string): Promise<void> {
     try {
       await mkdir(dir, { recursive: true });
       const filename = `${this.providerCode}_${Date.now()}.html`;

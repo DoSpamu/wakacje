@@ -14,9 +14,8 @@
 import pLimit from 'p-limit';
 import 'dotenv/config';
 
-import type { SearchFilter, ProviderCode, CanonicalDestination } from '@wakacje/shared';
+import type { SearchFilter, ProviderCode } from '@wakacje/shared';
 import { DEFAULT_FILTER } from '@wakacje/shared';
-import { DEFAULT_SCORING_CONFIG, loadScoringConfig } from '@wakacje/shared';
 
 import { RplScraper } from './providers/rpl/RplScraper.js';
 import { EximScraper } from './providers/exim/EximScraper.js';
@@ -44,7 +43,6 @@ import {
   upsertHotelReviewSummary,
   insertScrapeLogs,
 } from './db/queries.js';
-import { computeCompositeScore } from './scoring.js';
 import { logger } from './base/logger.js';
 import type { ScrapeContext } from './base/types.js';
 
@@ -97,7 +95,6 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
     nights: filter.nights,
   });
 
-  const scoringConfig = await loadScoringConfig(process.env['SCORING_CONFIG_PATH']);
   const limit = pLimit(concurrency);
   const errors: string[] = [];
 
