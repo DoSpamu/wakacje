@@ -11,6 +11,7 @@
     "scrape:itaka": "node --env-file=../../.env --import=tsx/esm src/run.ts itaka",
     "scrape:grecos": "node --env-file=../../.env --import=tsx/esm src/run.ts grecos",
     "scrape:tui": "node --env-file=../../.env --import=tsx/esm src/run.ts tui",
+    "enrich": "node --env-file=../../.env --import=tsx/esm src/enrich.ts",
     "seed": "node --env-file=../../.env --import=tsx/esm src/seed.ts",
     "migrate": "node --env-file=../../.env --import=tsx/esm src/db/migrate.ts",
     "build": "tsc --build",

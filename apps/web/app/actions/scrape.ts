@@ -39,7 +39,7 @@ async function triggerGitHub(providers: string, token: string, repo: string): Pr
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        ref: 'main',
+        ref: 'master',
         inputs: { providers, date_from: today, date_to: in90 },
       }),
     },

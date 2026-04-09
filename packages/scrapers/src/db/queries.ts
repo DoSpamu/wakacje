@@ -312,6 +312,79 @@ export async function insertScrapeLogs(
 }
 
 // ─────────────────────────────────────────────
+//  Hotel media (photos + YouTube)
+// ─────────────────────────────────────────────
+
+export async function insertHotelPhotos(
+  hotelId: string,
+  urls: string[],
+  source = 'tripadvisor',
+): Promise<void> {
+  if (urls.length === 0) return;
+
+  // Skip if photos already exist for this hotel+source
+  const { data: existing } = await supabase
+    .from('hotel_photos')
+    .select('id')
+    .eq('hotel_id', hotelId)
+    .eq('source', source)
+    .limit(1);
+
+  if (existing && existing.length > 0) return;
+
+  const rows = urls.map((url, i) => ({
+    hotel_id: hotelId,
+    url,
+    source,
+    sort_order: i,
+  }));
+
+  const { error } = await supabase.from('hotel_photos').insert(rows);
+  if (error) {
+    logger.warn('Failed to insert hotel photos', { error: error.message, hotelId });
+  }
+}
+
+export async function updateHotelMedia(
+  hotelId: string,
+  updates: { youtubeVideoId?: string | null; coverPhotoUrl?: string | null },
+): Promise<void> {
+  const dbUpdates: Record<string, string | null> = {};
+  if (updates.youtubeVideoId !== undefined) dbUpdates['youtube_video_id'] = updates.youtubeVideoId;
+  if (updates.coverPhotoUrl !== undefined) dbUpdates['cover_photo_url'] = updates.coverPhotoUrl;
+
+  if (Object.keys(dbUpdates).length === 0) return;
+
+  const { error } = await supabase.from('hotels').update(dbUpdates).eq('id', hotelId);
+  if (error) {
+    logger.warn('Failed to update hotel media', { error: error.message, hotelId });
+  }
+}
+
+export async function getHotelsWithoutMedia(limit = 50): Promise<
+  Array<{ id: string; canonical_name: string; location_city: string | null; destination_canonical: string | null }>
+> {
+  const { data, error } = await supabase
+    .from('hotels')
+    .select('id, canonical_name, location_city, destinations(canonical_name)')
+    .is('youtube_video_id', null)
+    .limit(limit);
+
+  if (error) {
+    logger.warn('Failed to fetch hotels without media', { error: error.message });
+    return [];
+  }
+
+  return (data ?? []).map((h) => ({
+    id: h.id,
+    canonical_name: h.canonical_name,
+    location_city: h.location_city,
+    destination_canonical:
+      (h.destinations as unknown as { canonical_name: string } | null)?.canonical_name ?? null,
+  }));
+}
+
+// ─────────────────────────────────────────────
 //  Scoring update
 // ─────────────────────────────────────────────
 

@@ -7,14 +7,14 @@ import ScrapeButton from '@/components/ScrapeButton';
 import type { OfferRow, UIFilter } from '@/lib/types';
 
 const DEFAULT_FILTER: UIFilter = {
-  destinations: ['turkey', 'egypt', 'greece', 'spain', 'cyprus'],
+  destinations: ['turkey', 'egypt', 'greece', 'spain', 'cyprus', 'tunisia', 'bulgaria'],
   airports: ['KTW', 'KRK'],
   dateFrom: new Date().toISOString().split('T')[0]!,
-  dateTo: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!,
-  nightsMin: 7,
-  nightsMax: 14,
+  dateTo: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!,
+  nightsMin: 5,
+  nightsMax: 16,
   adults: 2,
-  stars: [4, 5],
+  stars: [3, 4, 5],
   boardTypes: ['all-inclusive', 'ultra-all-inclusive'],
   sortBy: 'composite_score',
   sortOrder: 'desc',

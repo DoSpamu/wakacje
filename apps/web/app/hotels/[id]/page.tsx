@@ -24,14 +24,22 @@ export default async function HotelPage({ params }: Props) {
 
   if (!hotel) notFound();
 
-  // All offers for this hotel
-  const { data: offers } = await supabase
-    .from('offers_enriched')
-    .select('*')
-    .eq('hotel_id', params.id)
-    .eq('is_available', true)
-    .order('price_total', { ascending: true })
-    .limit(50);
+  // Photos + offers fetched in parallel
+  const [{ data: photosData }, { data: offers }] = await Promise.all([
+    supabase
+      .from('hotel_photos')
+      .select('url, caption')
+      .eq('hotel_id', params.id)
+      .order('sort_order', { ascending: true })
+      .limit(8),
+    supabase
+      .from('offers_enriched')
+      .select('*')
+      .eq('hotel_id', params.id)
+      .eq('is_available', true)
+      .order('price_total', { ascending: true })
+      .limit(50),
+  ]);
 
   const reviews = (hotel.hotel_reviews_summary ?? []) as Array<{
     source: string;
@@ -50,8 +58,10 @@ export default async function HotelPage({ params }: Props) {
 
   const taReview = reviews.find((r) => r.source === 'tripadvisor');
   const gReview = reviews.find((r) => r.source === 'google');
-
   const dest = hotel.destinations as { canonical_name: string; display_name: string; country_code: string } | null;
+  const h = hotel as Record<string, unknown>;
+  const youtubeVideoId = h['youtube_video_id'] as string | null | undefined;
+  const photos = photosData ?? [];
 
   // Group offers by provider
   const offersByProvider = (offers ?? []).reduce<Record<string, typeof offers>>((acc, o) => {
@@ -63,6 +73,51 @@ export default async function HotelPage({ params }: Props) {
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
+      {/* Photo gallery */}
+      {photos.length > 0 && (
+        <div className="overflow-hidden rounded-xl">
+          <div className="grid grid-cols-4 grid-rows-2 gap-1.5 h-72 md:h-96">
+            {/* Main photo — spans 2 cols & 2 rows */}
+            <a
+              href={(photos[0] as Record<string, string>)['url']}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="col-span-2 row-span-2 relative overflow-hidden rounded-l-xl bg-slate-100"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={(photos[0] as Record<string, string>)['url']}
+                alt={hotel.canonical_name}
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+              />
+            </a>
+            {/* Side photos */}
+            {photos.slice(1, 5).map((p, i) => {
+              const photo = p as Record<string, string>;
+              return (
+                <a
+                  key={i}
+                  href={photo['url']}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`relative overflow-hidden bg-slate-100 ${i === 1 ? 'rounded-tr-xl' : ''} ${i === 3 ? 'rounded-br-xl' : ''}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo['url']}
+                    alt={`${hotel.canonical_name} zdjęcie ${i + 2}`}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                  />
+                </a>
+              );
+            })}
+          </div>
+          {photos.length > 5 && (
+            <p className="text-xs text-slate-400 mt-1 text-right">+{photos.length - 5} więcej zdjęć</p>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
@@ -160,6 +215,36 @@ export default async function HotelPage({ params }: Props) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* YouTube promotional video */}
+      {youtubeVideoId ? (
+        <div className="card p-5">
+          <h2 className="font-semibold text-slate-700 mb-4">Film promocyjny</h2>
+          <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+            <iframe
+              className="absolute inset-0 w-full h-full rounded-lg"
+              src={`https://www.youtube.com/embed/${youtubeVideoId}?rel=0`}
+              title={`${hotel.canonical_name} — film promocyjny`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <a
+            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(hotel.canonical_name + ' hotel')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary text-sm flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M23.5 6.19a3.02 3.02 0 0 0-2.13-2.14C19.51 3.5 12 3.5 12 3.5s-7.51 0-9.38.55A3.02 3.02 0 0 0 .5 6.19C0 8.07 0 12 0 12s0 3.93.5 5.81a3.02 3.02 0 0 0 2.12 2.14C4.49 20.5 12 20.5 12 20.5s7.51 0 9.38-.55a3.02 3.02 0 0 0 2.13-2.14C24 15.93 24 12 24 12s0-3.93-.5-5.81zM9.75 15.5v-7l6.5 3.5-6.5 3.5z"/>
+            </svg>
+            Szukaj filmów na YouTube
+          </a>
         </div>
       )}
 

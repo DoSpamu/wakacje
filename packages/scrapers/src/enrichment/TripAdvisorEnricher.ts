@@ -24,6 +24,7 @@ export interface EnrichmentResult {
   hotelId: string;
   hotelName: string;
   tripadvisor?: Omit<HotelReviewSummary, 'id' | 'hotelId' | 'createdAt'>;
+  photos: string[];
 }
 
 const TA_SELECTORS = {
@@ -87,7 +88,7 @@ export class TripAdvisorEnricher {
     hotelName: string,
     location: string,
   ): Promise<EnrichmentResult> {
-    const result: EnrichmentResult = { hotelId, hotelName };
+    const result: EnrichmentResult = { hotelId, hotelName, photos: [] };
 
     try {
       await this.rateLimiter.acquire();
@@ -98,7 +99,8 @@ export class TripAdvisorEnricher {
       );
 
       if (reviewData) {
-        result.tripadvisor = reviewData;
+        result.tripadvisor = reviewData.data;
+        result.photos = reviewData.photos;
       }
     } catch (err) {
       logger.warn(`TripAdvisor enrichment failed for "${hotelName}"`, {
@@ -112,7 +114,7 @@ export class TripAdvisorEnricher {
   private async fetchTripAdvisorData(
     hotelName: string,
     location: string,
-  ): Promise<Omit<HotelReviewSummary, 'id' | 'hotelId' | 'createdAt'> | null> {
+  ): Promise<{ data: Omit<HotelReviewSummary, 'id' | 'hotelId' | 'createdAt'>; photos: string[] } | null> {
     if (!this.context) throw new Error('Enricher not initialized');
 
     const page = await this.context.newPage();
@@ -154,8 +156,12 @@ export class TripAdvisorEnricher {
       await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 });
       await jitteredDelay(2000, 1000);
 
-      // Step 4: Extract rating data
-      return await this.extractRatingData(page, fullUrl);
+      // Step 4: Extract rating data and photos
+      const ratingData = await this.extractRatingData(page, fullUrl);
+      if (!ratingData) return null;
+
+      const photos = await this.extractPhotos(page);
+      return { data: ratingData, photos };
     } finally {
       await page.close();
     }
@@ -303,6 +309,50 @@ export class TripAdvisorEnricher {
     }
 
     return tags;
+  }
+
+  private async extractPhotos(page: import('playwright').Page): Promise<string[]> {
+    const urls: string[] = [];
+
+    try {
+      // og:image is most reliable — always in <head>
+      const ogImage = await page
+        .getAttribute('meta[property="og:image"]', 'content')
+        .catch(() => null);
+      if (ogImage && ogImage.startsWith('http')) urls.push(ogImage);
+    } catch { /* ignore */ }
+
+    try {
+      // Extract photo CDN URLs from img tags (src attribute is present even when image load is blocked)
+      const imgUrls = await page.evaluate((): string[] => {
+        const results: string[] = [];
+        document.querySelectorAll('img').forEach((img) => {
+          const candidates = [
+            img.src,
+            img.getAttribute('data-src'),
+            img.getAttribute('data-lazyurl'),
+            img.getAttribute('data-original'),
+          ].filter(Boolean) as string[];
+
+          for (const u of candidates) {
+            if (
+              u &&
+              (u.includes('tripadvisor.com/media/photo') ||
+                u.includes('dynamic-media-cdn.tripadvisor.com'))
+            ) {
+              results.push(u);
+            }
+          }
+        });
+        return results;
+      });
+
+      for (const u of imgUrls) {
+        if (!urls.includes(u)) urls.push(u);
+      }
+    } catch { /* ignore */ }
+
+    return urls.slice(0, 8);
   }
 
   private buildScoreSummary(aspect: string, score: number | null): string | null {

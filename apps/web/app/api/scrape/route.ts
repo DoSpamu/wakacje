@@ -69,7 +69,7 @@ async function triggerGitHubActions(body: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        ref: 'main',
+        ref: 'master',
         inputs: {
           providers,
           date_from: body.dateFrom ?? today,

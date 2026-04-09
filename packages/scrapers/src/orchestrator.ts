@@ -24,6 +24,7 @@ import { ItakaScraper } from './providers/itaka/ItakaScraper.js';
 import { GrecosScraper } from './providers/grecos/GrecosScraper.js';
 import { TuiScraper } from './providers/tui/TuiScraper.js';
 import { TripAdvisorEnricher } from './enrichment/TripAdvisorEnricher.js';
+import { YouTubeEnricher } from './enrichment/YouTubeEnricher.js';
 import { normalizeOffer, inferCanonicalDestination } from './normalizer/OfferNormalizer.js';
 import {
   findBestHotelMatch,
@@ -41,6 +42,8 @@ import {
   upsertHotelAlias,
   insertOffers,
   upsertHotelReviewSummary,
+  insertHotelPhotos,
+  updateHotelMedia,
   insertScrapeLogs,
 } from './db/queries.js';
 import { logger } from './base/logger.js';
@@ -104,9 +107,10 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
   let hotelsMatched = 0;
   let enrichedHotels = 0;
 
-  // Enricher instance (shared across providers)
+  // Enricher instances (shared across providers)
   const enricher = runEnrichment ? new TripAdvisorEnricher() : null;
   if (enricher) await enricher.init();
+  const youtubeEnricher = runEnrichment ? new YouTubeEnricher() : null;
 
   try {
     // Run all providers concurrently (with concurrency limit)
@@ -278,6 +282,22 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
                       ...enrichResult.tripadvisor,
                     });
                     enrichedHotels++;
+                  }
+
+                  if (enrichResult.photos.length > 0) {
+                    await insertHotelPhotos(hotelId, enrichResult.photos);
+                    await updateHotelMedia(hotelId, { coverPhotoUrl: enrichResult.photos[0] });
+                  }
+
+                  // YouTube enrichment
+                  if (youtubeEnricher?.isAvailable()) {
+                    const videoId = await youtubeEnricher.findHotelVideo(
+                      rawOffer.hotelName,
+                      rawOffer.hotelLocation,
+                    );
+                    if (videoId) {
+                      await updateHotelMedia(hotelId, { youtubeVideoId: videoId });
+                    }
                   }
                 } catch (err) {
                   logger.warn('Enrichment failed', { hotel: rawOffer.hotelName, error: String(err) });
