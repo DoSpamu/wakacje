@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
 
   // Default: XLSX
   const buffer = await generateXlsx(offers);
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="wakacje-oferty-${timestamp}.xlsx"`,
