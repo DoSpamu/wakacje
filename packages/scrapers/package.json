@@ -1,0 +1,35 @@
+{
+  "name": "@wakacje/scrapers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scrape": "node --loader ts-node/esm src/run.ts all",
+    "scrape:rpl": "node --loader ts-node/esm src/run.ts rpl",
+    "scrape:exim": "node --loader ts-node/esm src/run.ts exim",
+    "scrape:coral": "node --loader ts-node/esm src/run.ts coral",
+    "scrape:itaka": "node --loader ts-node/esm src/run.ts itaka",
+    "scrape:grecos": "node --loader ts-node/esm src/run.ts grecos",
+    "scrape:tui": "node --loader ts-node/esm src/run.ts tui",
+    "seed": "node --loader ts-node/esm src/seed.ts",
+    "migrate": "node --loader ts-node/esm src/db/migrate.ts",
+    "build": "tsc --project tsconfig.json",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@wakacje/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.43.0",
+    "playwright": "^1.44.0",
+    "fuse.js": "^7.0.0",
+    "p-limit": "^5.0.0",
+    "p-retry": "^6.2.0",
+    "dotenv": "^16.4.0",
+    "zod": "^3.23.0",
+    "date-fns": "^3.6.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.0"
+  }
+}

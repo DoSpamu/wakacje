@@ -1,0 +1,50 @@
+{
+  "_comment": "Wakacje Aggregator — Scoring Configuration",
+  "_description": "Weights must sum to 1.0. Set SCORING_CONFIG_PATH=./scoring.config.json to use this file.",
+  "weights": {
+    "_note": "Adjust weights based on your priorities",
+    "priceNormalized": 0.20,
+    "overallRating": 0.15,
+    "foodScore": 0.25,
+    "roomsScore": 0.18,
+    "hotelStars": 0.07,
+    "reviewCountLog": 0.05,
+    "priceQualityRatio": 0.10
+  },
+  "normalization": {
+    "priceMin": 2000,
+    "priceMax": 15000,
+    "ratingScale": 5,
+    "reviewCountLogBase": 10,
+    "reviewCountMax": 10000
+  },
+  "presets": {
+    "foodFirst": {
+      "priceNormalized": 0.15,
+      "overallRating": 0.10,
+      "foodScore": 0.40,
+      "roomsScore": 0.15,
+      "hotelStars": 0.05,
+      "reviewCountLog": 0.05,
+      "priceQualityRatio": 0.10
+    },
+    "budgetFriendly": {
+      "priceNormalized": 0.40,
+      "overallRating": 0.15,
+      "foodScore": 0.15,
+      "roomsScore": 0.10,
+      "hotelStars": 0.05,
+      "reviewCountLog": 0.05,
+      "priceQualityRatio": 0.10
+    },
+    "luxuryFocus": {
+      "priceNormalized": 0.05,
+      "overallRating": 0.20,
+      "foodScore": 0.25,
+      "roomsScore": 0.25,
+      "hotelStars": 0.15,
+      "reviewCountLog": 0.05,
+      "priceQualityRatio": 0.05
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "wakacje",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Vacation offer aggregator from Polish travel agencies",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\" --ignore-path .gitignore",
+    "scrape": "pnpm --filter @wakacje/scrapers run scrape",
+    "scrape:rpl": "pnpm --filter @wakacje/scrapers run scrape:rpl",
+    "scrape:exim": "pnpm --filter @wakacje/scrapers run scrape:exim",
+    "scrape:coral": "pnpm --filter @wakacje/scrapers run scrape:coral",
+    "scrape:itaka": "pnpm --filter @wakacje/scrapers run scrape:itaka",
+    "scrape:grecos": "pnpm --filter @wakacje/scrapers run scrape:grecos",
+    "scrape:tui": "pnpm --filter @wakacje/scrapers run scrape:tui",
+    "seed": "pnpm --filter @wakacje/scrapers run seed",
+    "migrate": "pnpm --filter @wakacje/scrapers run migrate",
+    "type-check": "turbo run type-check"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.5",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
