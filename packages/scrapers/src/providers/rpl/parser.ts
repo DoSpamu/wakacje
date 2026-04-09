@@ -16,16 +16,25 @@ export function parseRplPrice(raw: string): number {
   return parseFloat(raw.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '')) || 0;
 }
 
-/** Parse "4★" or "5 gwiazdek" → 4 or 5 */
+/** Parse stars from data-rating attribute value ("4", "5") or text fallback */
 export function parseRplStars(raw: string): number {
+  const n = parseInt(raw.trim(), 10);
+  if (n >= 1 && n <= 5) return n;
   const match = /(\d+)/.exec(raw);
   return match ? parseInt(match[1]!, 10) : 4;
 }
 
-/** Parse "7 nocy" → 7 */
+/**
+ * Parse nights from "04.09.2026 (8 dni / 7 noclegów)" → 7
+ * The number before "noclegów" is nights; before "dni" is days.
+ */
 export function parseRplNights(raw: string): number {
-  const match = /(\d+)/.exec(raw);
-  return match ? parseInt(match[1]!, 10) : 7;
+  const nocy = /(\d+)\s*noclegi?ów?/i.exec(raw);
+  if (nocy) return parseInt(nocy[1]!, 10);
+  const dni = /(\d+)\s*dni/i.exec(raw);
+  if (dni) return parseInt(dni[1]!, 10) - 1; // days - 1 = nights
+  const plain = /(\d+)/.exec(raw);
+  return plain ? parseInt(plain[1]!, 10) : 7;
 }
 
 /** Normalize board type string from r.pl to canonical BoardType */
@@ -40,14 +49,18 @@ export function parseRplBoardType(raw: string): RawOffer['boardType'] {
   return 'unknown';
 }
 
-/** Parse departure airport from text like "Katowice (KTW)" → "KTW" */
+/** Parse departure airport from city name "Katowice" or code "KTW" → "KTW" */
 export function parseRplAirport(raw: string): string {
-  const match = /\(([A-Z]{3})\)/.exec(raw);
-  if (match) return match[1]!;
-  if (raw.includes('Katowice') || raw.includes('KTW')) return 'KTW';
-  if (raw.includes('Kraków') || raw.includes('Krakow') || raw.includes('KRK')) return 'KRK';
-  if (raw.includes('Warszawa') || raw.includes('WAW')) return 'WAW';
-  return raw.toUpperCase().trim();
+  const iata = /\b([A-Z]{3})\b/.exec(raw);
+  if (iata) return iata[1]!;
+  const lower = raw.toLowerCase();
+  if (lower.includes('katowice') || lower.includes('ktw') || lower.includes('pyrzowice')) return 'KTW';
+  if (lower.includes('kraków') || lower.includes('krakow') || lower.includes('krk') || lower.includes('balice')) return 'KRK';
+  if (lower.includes('warszawa') || lower.includes('warsaw') || lower.includes('waw') || lower.includes('chopin') || lower.includes('modlin')) return 'WAW';
+  if (lower.includes('wrocław') || lower.includes('wroclaw') || lower.includes('wroc') || lower.includes('wro')) return 'WRO';
+  if (lower.includes('gdańsk') || lower.includes('gdansk') || lower.includes('gdn')) return 'GDN';
+  if (lower.includes('poznań') || lower.includes('poznan') || lower.includes('poz')) return 'POZ';
+  return raw.replace(/\s*\(.*\)/, '').toUpperCase().trim().slice(0, 3) || 'KTW';
 }
 
 /** Parse date from various r.pl date formats → YYYY-MM-DD */
@@ -140,27 +153,32 @@ async function parseRplCard(card: Locator, sourceUrl: string): Promise<RawOffer 
     const hotelName = await getText(RPL_SELECTORS.hotelName);
     if (!hotelName) return null;
 
-    const starsText = await getText(RPL_SELECTORS.hotelStars);
+    // Stars: r.pl stores rating in data-rating attribute on .r-gwiazdki
+    const starsRating = await getAttr(RPL_SELECTORS.hotelStars, 'data-rating');
+    const starsText = starsRating || await getText(RPL_SELECTORS.hotelStars);
+
     const locationText = await getText(RPL_SELECTORS.hotelLocation);
-    const departureDateText = await getText(RPL_SELECTORS.departureDate);
-    const nightsText = await getText(RPL_SELECTORS.nights);
+    // "04.09.2026 (8 dni / 7 noclegów)" — date and nights in same element
+    const dateNightsText = await getText(RPL_SELECTORS.departureDate);
     const boardText = await getText(RPL_SELECTORS.boardType);
-    const priceText = await getText(RPL_SELECTORS.price);
     const pricePerPersonText = await getText(RPL_SELECTORS.pricePerPerson);
     const airportText = await getText(RPL_SELECTORS.departureAirport);
 
-    const href = await getAttr(RPL_SELECTORS.offerLink, 'href');
+    // Card itself is an <a> element — get href directly
+    const href = (await card.getAttribute('href')) ?? await getAttr(RPL_SELECTORS.offerLink, 'href');
     const offerUrl = href
-      ? href.startsWith('http')
-        ? href
-        : `https://r.pl${href}`
+      ? href.startsWith('http') ? href : `https://r.pl${href}`
       : sourceUrl;
 
-    const departureDate = parseRplDate(departureDateText);
-    const nights = parseRplNights(nightsText) || 7;
-    const priceTotal = parseRplPrice(priceText);
+    const departureDate = parseRplDate(dateNightsText);
+    const nights = parseRplNights(dateNightsText) || 7;
+    const adults = 2;
+    const pricePerPerson = parseRplPrice(pricePerPersonText);
 
-    if (!priceTotal || priceTotal < 100) return null;
+    if (!pricePerPerson || pricePerPerson < 100) return null;
+
+    // r.pl shows price per person; multiply for total
+    const priceTotal = Math.round(pricePerPerson * adults);
 
     const departureDateObj = new Date(departureDate);
     const returnDateObj = new Date(departureDateObj);
@@ -174,13 +192,13 @@ async function parseRplCard(card: Locator, sourceUrl: string): Promise<RawOffer 
       destinationRaw: locationText,
       departureAirport: parseRplAirport(airportText) || 'KTW',
       departureDate,
-      returnDate: returnDateObj.toISOString().split('T')[0],
+      returnDate: returnDateObj.toISOString().split('T')[0]!,
       nights,
       boardType: parseRplBoardType(boardText),
       priceTotal,
-      pricePerPerson: parseRplPrice(pricePerPersonText) || Math.round(priceTotal / 2),
+      pricePerPerson,
       currency: 'PLN',
-      adults: 2,
+      adults,
       children: 0,
       sourceUrl: offerUrl,
     };
