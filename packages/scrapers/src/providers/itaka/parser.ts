@@ -114,6 +114,66 @@ export function parseItakaAirport(raw: string): string {
   return 'KTW';
 }
 
+/**
+ * Try to extract offer data from any intercepted Itaka API JSON response.
+ * Itaka loads search results via XHR after initial page render.
+ */
+export function parseItakaApiResponse(json: unknown): RawOffer[] {
+  if (!json || typeof json !== 'object') return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = json as any;
+
+  // Try common Itaka response shapes
+  const offerList: unknown[] =
+    data?.offers ??
+    data?.results ??
+    data?.data?.offers ??
+    data?.pageProps?.offers ??
+    data?.pageProps?.searchResults?.offers ??
+    data?.pageProps?.results ??
+    data?.searchResults?.offers ??
+    [];
+
+  if (!Array.isArray(offerList) || offerList.length === 0) return [];
+
+  const offers: RawOffer[] = [];
+  for (const raw of offerList) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r = raw as any;
+      const departureDate = parseItakaDate(String(r.departureDate ?? r.flightDate ?? r.date ?? ''));
+      const nights = Number(r.nights ?? r.duration ?? 7);
+      const returnDateObj = new Date(departureDate);
+      returnDateObj.setDate(returnDateObj.getDate() + nights);
+
+      const offer: RawOffer = {
+        providerCode: 'itaka',
+        providerOfferId: String(r.id ?? r.offerId ?? r.code ?? ''),
+        hotelName: String(r.hotelName ?? r.hotel?.name ?? r.name ?? ''),
+        hotelStars: Math.min(5, Math.max(1, Number(r.stars ?? r.hotelCategory ?? r.hotel?.stars ?? 4))) as RawOffer['hotelStars'],
+        hotelLocation: String(r.location ?? r.resort ?? r.region ?? r.city ?? ''),
+        destinationRaw: String(r.country ?? r.destination ?? r.countryName ?? ''),
+        departureAirport: parseItakaAirport(String(r.departureAirport ?? r.airport ?? r.from ?? '')),
+        departureDate,
+        returnDate: returnDateObj.toISOString().split('T')[0]!,
+        nights,
+        boardType: parseItakaBoardType(String(r.boardType ?? r.board ?? r.mealType ?? '')),
+        priceTotal: Number(r.priceTotal ?? r.price?.total ?? r.price ?? 0),
+        pricePerPerson: Number(r.pricePerPerson ?? r.price?.perPerson ?? 0),
+        currency: String(r.currency ?? 'PLN'),
+        adults: Number(r.adults ?? 2),
+        children: Number(r.children ?? 0),
+        sourceUrl: String(r.url ?? r.offerUrl ?? 'https://www.itaka.pl'),
+        rawData: r as Record<string, unknown>,
+      };
+
+      if (offer.hotelName && offer.priceTotal > 0) offers.push(offer);
+    } catch { /* skip */ }
+  }
+  return offers;
+}
+
 /** DOM fallback parser */
 export async function parseItakaPage(page: Page, sourceUrl: string): Promise<RawOffer[]> {
   const offers: RawOffer[] = [];

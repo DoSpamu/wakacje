@@ -7,9 +7,11 @@ export function parseGrecosPrice(raw: string): number {
   return parseFloat(raw.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '')) || 0;
 }
 
+/** Parse "***", "****", "***+" → 3, 4, 4 (+ means half-star, round up) */
 export function parseGrecosStars(raw: string): number {
-  const match = /(\d+)/.exec(raw);
-  return match ? Math.min(5, parseInt(match[1]!, 10)) : 4;
+  const stars = (raw.match(/\*/g) ?? []).length;
+  const hasPlus = raw.includes('+');
+  return Math.min(5, stars + (hasPlus && stars < 5 ? 1 : 0)) || 4;
 }
 
 export function parseGrecosNights(raw: string): number {
@@ -51,20 +53,40 @@ export function parseGrecosAirport(raw: string): string {
   return 'KTW';
 }
 
+/** Extract departure date and airport from the Grecos search URL */
+function extractFromUrl(sourceUrl: string): { depDate: string; airport: string; nights: number } {
+  try {
+    const u = new URL(sourceUrl);
+    const dateRaw = u.searchParams.get('DateOfDeparture') ?? '';
+    const depDate = dateRaw.length === 8
+      ? `${dateRaw.slice(0, 4)}-${dateRaw.slice(4, 6)}-${dateRaw.slice(6, 8)}`
+      : new Date().toISOString().split('T')[0]!;
+    const fromParam = u.searchParams.get('From') ?? 'KTW';
+    const airport = fromParam.split(',')[0] ?? 'KTW';
+    const durationInterval = u.searchParams.get('DurationInterval') ?? '6:14';
+    const nights = parseInt(durationInterval.split(':')[0] ?? '7', 10) + 1; // min nights
+    return { depDate, airport, nights };
+  } catch {
+    return { depDate: new Date().toISOString().split('T')[0]!, airport: 'KTW', nights: 7 };
+  }
+}
+
 export async function parseGrecosPage(page: Page, sourceUrl: string): Promise<RawOffer[]> {
   const offers: RawOffer[] = [];
 
-  // Try structured data first
+  // Try window state first
   const structuredOffers = await parseGrecosStructuredData(page);
   if (structuredOffers.length > 0) {
     logger.debug(`Parsed ${structuredOffers.length} Grecos offers from structured data`, undefined, 'grecos');
     return structuredOffers;
   }
 
-  // DOM fallback
+  // DOM parsing with verified selectors
+  const { depDate, airport, nights: defaultNights } = extractFromUrl(sourceUrl);
+
   const cards = page.locator(GRECOS_SELECTORS.offerCard);
   const count = await cards.count();
-  logger.debug(`Found ${count} Grecos offer cards (DOM)`, undefined, 'grecos');
+  logger.debug(`Found ${count} Grecos offer cards`, undefined, 'grecos');
 
   for (let i = 0; i < count; i++) {
     try {
@@ -73,40 +95,44 @@ export async function parseGrecosPage(page: Page, sourceUrl: string): Promise<Ra
         try { return (await card.locator(sel).first().innerText({ timeout: 3000 })).trim(); }
         catch { return ''; }
       };
-      const getAttr = async (sel: string, attr: string) => {
-        try { return (await card.locator(sel).first().getAttribute(attr)) ?? ''; }
-        catch { return ''; }
-      };
 
       const hotelName = await getText(GRECOS_SELECTORS.hotelName);
       if (!hotelName) continue;
 
-      const depDate = parseGrecosDate(await getText(GRECOS_SELECTORS.departureDate));
-      const nights = parseGrecosNights(await getText(GRECOS_SELECTORS.nights));
-      const priceTotal = parseGrecosPrice(await getText(GRECOS_SELECTORS.priceTotal));
+      // Price text: "Od 1 922 PLN 3 dni"
+      const priceText = await getText(GRECOS_SELECTORS.priceTotal);
+      const priceTotal = parseGrecosPrice(priceText);
       if (!priceTotal || priceTotal < 100) continue;
+
+      // Parse nights from price text "X dni" if available, else use URL param
+      const dniMatch = /(\d+)\s*dni/.exec(priceText);
+      const nights = dniMatch ? Math.max(1, parseInt(dniMatch[1]!, 10) - 1) : defaultNights;
 
       const returnDateObj = new Date(depDate);
       returnDateObj.setDate(returnDateObj.getDate() + nights);
 
-      const href = await getAttr(GRECOS_SELECTORS.offerLink, 'href');
+      // Card is a div wrapping one <a> — get href from the link
+      const href = await card.locator('a').first().getAttribute('href').catch(() => null);
       const offerUrl = href
         ? href.startsWith('http') ? href : `https://www.grecos.pl${href}`
         : sourceUrl;
 
+      const starsText = await getText(GRECOS_SELECTORS.hotelStars);
+      const location = await getText(GRECOS_SELECTORS.hotelLocation);
+
       offers.push({
         providerCode: 'grecos',
         hotelName,
-        hotelStars: parseGrecosStars(await getText(GRECOS_SELECTORS.hotelStars)) as RawOffer['hotelStars'],
-        hotelLocation: await getText(GRECOS_SELECTORS.hotelLocation),
-        destinationRaw: await getText(GRECOS_SELECTORS.hotelLocation),
-        departureAirport: parseGrecosAirport(await getText(GRECOS_SELECTORS.departureAirport)) || 'KTW',
+        hotelStars: parseGrecosStars(starsText) as RawOffer['hotelStars'],
+        hotelLocation: location,
+        destinationRaw: location,
+        departureAirport: airport,
         departureDate: depDate,
         returnDate: returnDateObj.toISOString().split('T')[0]!,
         nights,
-        boardType: parseGrecosBoardType(await getText(GRECOS_SELECTORS.boardType)),
+        boardType: 'all-inclusive', // Grecos is all-inclusive specialist; board not shown in cards
         priceTotal,
-        pricePerPerson: parseGrecosPrice(await getText(GRECOS_SELECTORS.pricePerPerson)) || Math.round(priceTotal / 2),
+        pricePerPerson: Math.round(priceTotal / 2),
         currency: 'PLN',
         adults: 2,
         children: 0,

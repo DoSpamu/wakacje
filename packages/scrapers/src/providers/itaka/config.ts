@@ -28,10 +28,16 @@ export const ITAKA_SELECTORS = {
 };
 
 export const ITAKA_CONFIG = {
-  resultsTimeout: 30_000,
+  resultsTimeout: 45_000,
   maxPages: 20,
-  /** URL parameter pattern */
-  baseSearchUrl: 'https://www.itaka.pl/wczasy',
+  /**
+   * Real search results URL: /wyniki-wyszukiwania/wakacje/:destination/
+   * Confirmed from Itaka's Next.js route definitions in page HTML.
+   * Destination slug goes in path, other params as query string.
+   */
+  searchUrl: 'https://www.itaka.pl/wyniki-wyszukiwania/wakacje/',
+  /** Fallback — general search without destination in path */
+  baseSearchUrl: 'https://www.itaka.pl/wyniki-wyszukiwania/wakacje/',
   allInclusiveUrl: 'https://www.itaka.pl/all-inclusive/tanie/',
 };
 

@@ -33,68 +33,61 @@ export class EximScraper extends BaseScraper {
     return parseEximPage(page, url);
   }
 
-  /** Override init to set up API response interception */
+  /** Override init to set up broad API response interception */
   async init(): Promise<void> {
     await super.init();
 
     if (!this.context) return;
 
-    // Intercept JSON API responses that contain offer data
-    await this.context.route(EXIM_CONFIG.apiPattern, async (route: Route) => {
+    // Intercept ALL fetch/XHR responses and try to extract offer data from JSON
+    const tryIntercept = async (route: Route) => {
       const response = await route.fetch();
       try {
-        const json = await response.json();
-        const offers = parseEximApiResponse(json);
-        if (offers.length > 0) {
-          logger.debug(`Intercepted ${offers.length} offers from API`, undefined, 'exim');
-          this.interceptedOffers.push(...offers);
+        const contentType = response.headers()['content-type'] ?? '';
+        if (contentType.includes('json')) {
+          const json = await response.json();
+          const offers = parseEximApiResponse(json);
+          if (offers.length > 0) {
+            logger.debug(`Intercepted ${offers.length} Exim offers from API`, undefined, 'exim');
+            this.interceptedOffers.push(...offers);
+          }
         }
       } catch {
-        // Not a JSON response or not offer data
+        // Not parseable — ignore
       }
       await route.fulfill({ response });
-    });
+    };
 
-    // Also intercept common Exim API patterns
-    await this.context.route('**/search**', async (route: Route) => {
-      const response = await route.fetch();
-      try {
-        const json = await response.json();
-        const offers = parseEximApiResponse(json);
-        if (offers.length > 0) {
-          this.interceptedOffers.push(...offers);
-        }
-      } catch {
-        // ignore
-      }
-      await route.fulfill({ response });
-    });
+    // Cast the handler to satisfy Playwright's overloaded types
+    const handler = tryIntercept as Parameters<typeof this.context.route>[1];
+    await this.context.route(EXIM_CONFIG.apiPattern, handler);
+    await this.context.route('**/search**', handler);
+    await this.context.route('**/oferty**', handler);
+    await this.context.route('**/pakiety**', handler);
+    await this.context.route('**/wyniki**', handler);
+    await this.context.route('**/*.json*', handler);
   }
 
   protected async waitForResults(page: Page): Promise<void> {
-    // Wait for spinner to disappear
+    // Wait for networkidle so all API calls have fired
     try {
-      await page.waitForSelector(EXIM_SELECTORS.loadingSpinner, {
-        state: 'hidden',
-        timeout: EXIM_CONFIG.resultsTimeout,
-      });
+      await page.waitForLoadState('networkidle', { timeout: EXIM_CONFIG.resultsTimeout });
     } catch {
-      // No spinner visible — OK
+      // Timeout — continue
     }
 
-    // Wait for at least one offer card or no-results
+    // Extra settle time for dynamic rendering
+    await jitteredDelay(3000, 1000);
+
+    // Best-effort wait for DOM cards
     try {
       await Promise.race([
-        page.waitForSelector(EXIM_SELECTORS.offerCard, { timeout: EXIM_CONFIG.resultsTimeout }),
-        page.waitForSelector(EXIM_SELECTORS.noResults, { timeout: EXIM_CONFIG.resultsTimeout }),
+        page.waitForSelector(EXIM_SELECTORS.offerCard, { timeout: 10_000 }),
+        page.waitForSelector(EXIM_SELECTORS.noResults, { timeout: 10_000 }),
       ]);
     } catch {
-      // Timeout — proceed anyway, might have intercepted via API
-      logger.warn('Timeout waiting for Exim results (may still have API data)', undefined, 'exim');
+      logger.warn('Timeout waiting for Exim DOM results (using intercepted API data if available)', undefined, 'exim');
     }
-
-    // Small extra wait for dynamic content to settle
-    await jitteredDelay(1500, 500);
   }
 
   protected async goToNextPage(page: Page): Promise<boolean> {

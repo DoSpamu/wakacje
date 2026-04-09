@@ -7,11 +7,13 @@ export const runtime = 'nodejs';
  *
  * Triggers a scrape run. Requires SCRAPE_API_SECRET header for authorization.
  *
- * In production the scraper runs on a separate server/process.
- * This endpoint is a convenience trigger — it spawns a child process.
+ * On Vercel: dispatches a GitHub Actions workflow_dispatch event.
+ * Locally: spawns a child process with tsx.
  *
- * For Vercel deployment: use a separate server (Railway, DigitalOcean, etc.)
- * and call this endpoint via a cron job or GitHub Action.
+ * Required env vars on Vercel:
+ *   SCRAPE_API_SECRET  — shared secret for auth
+ *   GITHUB_TOKEN       — PAT with repo+workflow scopes
+ *   GITHUB_REPO        — "owner/repo" e.g. "dawid/wakacje"
  */
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-scrape-secret');
@@ -27,25 +29,86 @@ export async function POST(req: NextRequest) {
     dateTo?: string;
   };
 
-  // In production: this would POST to a separate scraper API or trigger a job
-  // For local development: we can spawn a child process
-
   const isVercel = process.env['VERCEL'] === '1';
 
   if (isVercel) {
-    // On Vercel, return instructions since we can't spawn long-running processes
-    return NextResponse.json({
-      message: 'On Vercel, run the scraper separately. See docs/deployment.md',
-      command: `pnpm scrape ${(body.providers ?? []).join(',')}`,
-      docs: 'docs/deployment.md',
-    });
+    return triggerGitHubActions(body);
   }
 
-  // Local: try to spawn the scraper as a background process
+  return spawnLocalScraper(body);
+}
+
+/** Trigger GitHub Actions workflow_dispatch (for Vercel production) */
+async function triggerGitHubActions(body: {
+  providers?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  const token = process.env['GITHUB_TOKEN'];
+  const repo = process.env['GITHUB_REPO']; // e.g. "dawid/wakacje"
+
+  if (!token || !repo) {
+    return NextResponse.json(
+      { error: 'GITHUB_TOKEN and GITHUB_REPO env vars are required on Vercel' },
+      { status: 500 },
+    );
+  }
+
+  const providers = body.providers?.join(',') ?? 'all';
+  const today = new Date().toISOString().split('T')[0]!;
+  const in90 = new Date(Date.now() + 90 * 24 * 3600_000).toISOString().split('T')[0]!;
+
+  const response = await fetch(
+    `https://api.github.com/repos/${repo}/actions/workflows/scrape.yml/dispatches`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ref: 'main',
+        inputs: {
+          providers,
+          date_from: body.dateFrom ?? today,
+          date_to: body.dateTo ?? in90,
+        },
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const detail = await response.text();
+    return NextResponse.json(
+      { error: 'GitHub API error', detail },
+      { status: response.status },
+    );
+  }
+
+  return NextResponse.json({
+    message: 'Scrape triggered via GitHub Actions',
+    providers,
+    workflow: `https://github.com/${repo}/actions/workflows/scrape.yml`,
+  });
+}
+
+/** Spawn local scraper process (for development) */
+async function spawnLocalScraper(body: {
+  providers?: string[];
+  destinations?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+}) {
   try {
     const { spawn } = await import('child_process');
 
     const providers = body.providers?.join(',') ?? 'all';
+    const scraperDir = process.cwd()
+      .replace('apps/web', 'packages/scrapers')
+      .replace('apps\\web', 'packages\\scrapers');
+
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       SCRAPE_DESTINATIONS: body.destinations?.join(',') ?? '',
@@ -53,8 +116,11 @@ export async function POST(req: NextRequest) {
       SCRAPE_DATE_TO: body.dateTo ?? '',
     };
 
-    const child = spawn('node', ['--loader', 'ts-node/esm', 'src/run.ts', providers], {
-      cwd: process.cwd().replace('apps/web', 'packages/scrapers').replace('apps\\web', 'packages\\scrapers'),
+    const args = ['--import', 'tsx/esm', 'src/run.ts'];
+    if (providers !== 'all') args.push(providers);
+
+    const child = spawn('node', args, {
+      cwd: scraperDir,
       env,
       detached: true,
       stdio: 'ignore',
@@ -63,7 +129,7 @@ export async function POST(req: NextRequest) {
     child.unref();
 
     return NextResponse.json({
-      message: 'Scrape started',
+      message: 'Scrape started locally',
       providers,
       pid: child.pid,
     });
@@ -76,7 +142,6 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  // Return last scrape runs status
   const { createServerClient } = await import('@/lib/supabase');
   const supabase = createServerClient();
 

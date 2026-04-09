@@ -2,9 +2,22 @@ name: Scrape vacation offers
 
 on:
   schedule:
-    - cron: '0 6 * * *'    # Codziennie o 6:00 UTC (8:00 PL)
-    - cron: '0 18 * * *'   # I o 18:00 UTC (20:00 PL)
-  workflow_dispatch:         # Manualnie z GitHub UI
+    - cron: '30 6 * * *'   # Codziennie o 8:30 PL (6:30 UTC)
+    - cron: '0 13 * * *'   # I o 15:00 PL (13:00 UTC)
+  workflow_dispatch:         # Manualnie z GitHub UI lub API
+    inputs:
+      providers:
+        description: 'Providers to scrape (comma-separated, or "all")'
+        required: false
+        default: 'all'
+      date_from:
+        description: 'Date from (YYYY-MM-DD, default: today)'
+        required: false
+        default: ''
+      date_to:
+        description: 'Date to (YYYY-MM-DD, default: today+90d)'
+        required: false
+        default: ''
 
 jobs:
   scrape:
@@ -29,6 +42,17 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @wakacje/scrapers exec playwright install chromium --with-deps
 
+      - name: Set date range
+        id: dates
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+          IN_90=$(date -u -d '+90 days' +%Y-%m-%d)
+          echo "date_from=${INPUT_DATE_FROM:-$TODAY}" >> $GITHUB_OUTPUT
+          echo "date_to=${INPUT_DATE_TO:-$IN_90}" >> $GITHUB_OUTPUT
+        env:
+          INPUT_DATE_FROM: ${{ inputs.date_from }}
+          INPUT_DATE_TO: ${{ inputs.date_to }}
+
       - name: Run scraper
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -41,9 +65,10 @@ jobs:
           SCRAPER_HEADLESS: true
           SCRAPER_DELAY_MS: 2500
           ENABLE_ENRICHMENT: true
+          SCRAPE_DATE_FROM: ${{ steps.dates.outputs.date_from }}
+          SCRAPE_DATE_TO: ${{ steps.dates.outputs.date_to }}
         run: |
-          export TODAY=$(date -u +%Y-%m-%d)
-          export IN_90_DAYS=$(date -u -d '+90 days' +%Y-%m-%d)
-          export SCRAPE_DATE_FROM=$TODAY
-          export SCRAPE_DATE_TO=$IN_90_DAYS
-          pnpm scrape
+          PROVIDERS="${{ inputs.providers || 'all' }}"
+          # Run node directly (avoid --env-file flag which requires a .env file on disk)
+          node --import=tsx/esm src/run.ts "$PROVIDERS"
+        working-directory: packages/scrapers

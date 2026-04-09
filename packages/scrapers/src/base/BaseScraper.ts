@@ -166,24 +166,51 @@ export abstract class BaseScraper {
     // Wait for results container
     await this.waitForResults(page);
 
+    // Track seen offer keys — deduplicates "load more" reparsing of existing DOM cards
+    const seen = new Set<string>();
+    const addNew = (batch: RawOffer[]): number => {
+      let added = 0;
+      for (const o of batch) {
+        const key = `${o.hotelName}|${o.departureDate}|${o.departureAirport}|${o.priceTotal}`;
+        if (!seen.has(key)) { seen.add(key); offers.push(o); added++; }
+      }
+      return added;
+    };
+
     // Parse first page
     const firstPageOffers = await this.parsePage(page, url);
-    offers.push(...firstPageOffers);
+    addNew(firstPageOffers);
     pages++;
 
     logger.info(`Page ${pages}: ${firstPageOffers.length} offers`, undefined, this.providerCode);
 
     // Handle pagination
     let hasMore = true;
+    let noNewStreak = 0;
     while (hasMore) {
       hasMore = await this.goToNextPage(page);
       if (hasMore) {
         await this.rateLimiter.acquire();
         await this.waitForResults(page);
         const nextOffers = await this.parsePage(page, page.url());
-        offers.push(...nextOffers);
+        const newCount = addNew(nextOffers);
         pages++;
-        logger.info(`Page ${pages}: ${nextOffers.length} offers`, undefined, this.providerCode);
+        logger.info(
+          `Page ${pages}: ${nextOffers.length} offers (${newCount} new)`,
+          undefined,
+          this.providerCode,
+        );
+
+        // Stop if no new unique offers appear (avoids infinite "load more" loops)
+        if (newCount === 0) {
+          noNewStreak++;
+          if (noNewStreak >= 2) {
+            logger.debug('No new offers on 2 consecutive pages — stopping', undefined, this.providerCode);
+            break;
+          }
+        } else {
+          noNewStreak = 0;
+        }
 
         // Safety limit
         if (pages >= 20) {

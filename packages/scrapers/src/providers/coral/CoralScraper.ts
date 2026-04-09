@@ -1,3 +1,4 @@
+import { chromium } from 'playwright';
 import type { Page, Route } from 'playwright';
 import type { RawOffer, SearchFilter } from '@wakacje/shared';
 import { BaseScraper } from '../../base/BaseScraper.js';
@@ -20,7 +21,47 @@ export class CoralScraper extends BaseScraper {
   }
 
   async init(): Promise<void> {
-    await super.init();
+    // Coral Travel uses Incapsula anti-bot — launch with stealth args
+    this.browser = await chromium.launch({
+      headless: this.config.headless,
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--no-sandbox',
+        '--disable-infobars',
+        '--window-size=1366,768',
+      ],
+    });
+
+    this.context = await this.browser.newContext({
+      userAgent: this.config.userAgent,
+      viewport: { width: 1366, height: 768 },
+      locale: 'pl-PL',
+      timezoneId: 'Europe/Warsaw',
+      extraHTTPHeaders: {
+        'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Upgrade-Insecure-Requests': '1',
+      },
+    });
+
+    // Override automation-detection properties
+    await this.context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).chrome = { runtime: {} };
+    });
+
+    // Block images/fonts for speed (same as BaseScraper)
+    await this.context.route('**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf}', (route) =>
+      route.abort(),
+    );
+
+    logger.info('Browser initialized (stealth mode)', { browser: 'chromium' }, 'coral');
 
     if (!this.context) return;
 

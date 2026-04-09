@@ -1,9 +1,9 @@
-import type { Page } from 'playwright';
+import type { Page, Route } from 'playwright';
 import type { RawOffer, SearchFilter } from '@wakacje/shared';
 import { BaseScraper } from '../../base/BaseScraper.js';
 import { logger } from '../../base/logger.js';
 import { jitteredDelay } from '../../base/retry.js';
-import { parseItakaPage } from './parser.js';
+import { parseItakaPage, parseItakaApiResponse } from './parser.js';
 import { ITAKA_SELECTORS, ITAKA_CONFIG, ITAKA_DESTINATIONS, ITAKA_BOARD_MAP, ITAKA_STARS_MAP } from './config.js';
 
 export class ItakaScraper extends BaseScraper {
@@ -11,37 +11,33 @@ export class ItakaScraper extends BaseScraper {
   readonly baseUrl = 'https://www.itaka.pl';
   readonly selectors = ITAKA_SELECTORS;
 
+  private interceptedOffers: RawOffer[] = [];
+
   /**
-   * Build Itaka search URLs from canonical filter.
+   * Build Itaka search URLs.
    *
-   * Reference URL:
-   * https://www.itaka.pl/all-inclusive/tanie/?dateFrom=9.04.2026&dateTo=31.05.2026
-   *   &departuresByPlane=KTW%2CKRK&page=1&durationMin=7&participants[0][adults]=2
+   * Itaka's real search URL is:
+   *   /wyniki-wyszukiwania/wakacje/:destination/?dateFrom=D.MM.YYYY&...
+   *
+   * Confirmed from their Next.js route definitions found in page HTML.
    */
   protected buildSearchUrls(filter: SearchFilter): string[] {
     const urls: string[] = [];
 
-    // Format date as D.MM.YYYY (Itaka format)
     const formatDate = (iso: string): string => {
       const [year, month, day] = iso.split('-');
       return `${parseInt(day!, 10)}.${month}.${year}`;
     };
 
-    // If all-inclusive is in board types, use the dedicated /all-inclusive/ section
-    const isAllInclusive = filter.boardTypes.some((b) =>
-      b === 'all-inclusive' || b === 'ultra-all-inclusive',
-    );
+    const baseUrl = ITAKA_CONFIG.searchUrl;
 
-    const baseUrl = isAllInclusive
-      ? `${ITAKA_CONFIG.allInclusiveUrl}`
-      : `${ITAKA_CONFIG.baseSearchUrl}/`;
-
-    // Map destinations to Itaka slugs
     const itakaDests = filter.destinations
       .map((d) => ITAKA_DESTINATIONS[d])
       .filter(Boolean) as string[];
 
-    for (const dest of itakaDests.length > 0 ? itakaDests : ['']) {
+    const destinations = itakaDests.length > 0 ? itakaDests : [''];
+
+    for (const dest of destinations) {
       const params = new URLSearchParams();
 
       params.set('dateFrom', formatDate(filter.departureDateFrom));
@@ -55,7 +51,6 @@ export class ItakaScraper extends BaseScraper {
         params.set('participants[0][children]', filter.children.toString());
       }
 
-      // Hotel stars
       const starValues = filter.hotelStars
         .map((s) => ITAKA_STARS_MAP[s])
         .filter(Boolean) as string[];
@@ -63,58 +58,89 @@ export class ItakaScraper extends BaseScraper {
         params.set('minHotelCategory', starValues[0]!);
       }
 
-      // Board types (when not using all-inclusive URL section)
-      if (!isAllInclusive) {
-        const boardValues = filter.boardTypes
-          .map((b) => ITAKA_BOARD_MAP[b])
-          .filter(Boolean) as string[];
-        if (boardValues.length > 0) {
-          params.set('boardType', boardValues.join(','));
-        }
+      const boardValues = filter.boardTypes
+        .map((b) => ITAKA_BOARD_MAP[b])
+        .filter(Boolean) as string[];
+      if (boardValues.length > 0) {
+        params.set('boardType', boardValues.join(','));
       }
 
-      if (dest) params.set('country', dest);
-
+      // Destination slug goes in path (Next.js route param), NOT as query param
       const url = dest
-        ? `${ITAKA_CONFIG.baseSearchUrl}/${dest}/?${params.toString()}`
+        ? `${baseUrl}${dest}/?${params.toString()}`
         : `${baseUrl}?${params.toString()}`;
 
       urls.push(url);
-    }
-
-    // If no destination-specific URLs, use general search
-    if (urls.length === 0) {
-      const params = new URLSearchParams();
-      params.set('dateFrom', formatDate(filter.departureDateFrom));
-      params.set('dateTo', formatDate(filter.departureDateTo));
-      params.set('departuresByPlane', filter.departureAirports.join(','));
-      params.set('durationMin', filter.nights.min.toString());
-      params.set('participants[0][adults]', filter.adults.toString());
-      urls.push(`${baseUrl}?${params.toString()}`);
     }
 
     logger.info(`Built ${urls.length} Itaka search URLs`, undefined, 'itaka');
     return urls;
   }
 
+  async init(): Promise<void> {
+    await super.init();
+
+    if (!this.context) return;
+
+    // Intercept all JSON responses — Itaka loads offers via XHR after page render
+    const tryIntercept = async (route: Route) => {
+      const response = await route.fetch();
+      try {
+        const ct = response.headers()['content-type'] ?? '';
+        if (ct.includes('json')) {
+          const json = await response.json();
+          const offers = parseItakaApiResponse(json);
+          if (offers.length > 0) {
+            logger.debug(`Intercepted ${offers.length} Itaka offers from API`, undefined, 'itaka');
+            this.interceptedOffers.push(...offers);
+          }
+        }
+      } catch {
+        // not JSON or not offers
+      }
+      await route.fulfill({ response });
+    };
+
+    const handler = tryIntercept as Parameters<typeof this.context.route>[1];
+    await this.context.route('**/_next/data/**', handler);
+    await this.context.route('**/api/**', handler);
+    await this.context.route('**/search**', handler);
+    await this.context.route('**/oferty**', handler);
+    await this.context.route('**/wyniki**', handler);
+    await this.context.route('**/*.json*', handler);
+  }
+
   protected async parsePage(page: Page, url: string): Promise<RawOffer[]> {
+    if (this.interceptedOffers.length > 0) {
+      const offers = [...this.interceptedOffers];
+      this.interceptedOffers = [];
+      logger.info(`Using ${offers.length} Itaka offers from API interception`, undefined, 'itaka');
+      return offers;
+    }
     return parseItakaPage(page, url);
   }
 
   protected async waitForResults(page: Page): Promise<void> {
+    // Wait for networkidle — let all XHR calls complete
+    try {
+      await page.waitForLoadState('networkidle', { timeout: ITAKA_CONFIG.resultsTimeout });
+    } catch {
+      // continue
+    }
+
+    await jitteredDelay(2000, 500);
+
     try {
       await page.waitForSelector(ITAKA_SELECTORS.loadingSpinner, {
         state: 'hidden',
-        timeout: ITAKA_CONFIG.resultsTimeout,
+        timeout: 10_000,
       });
-    } catch {
-      // no spinner
-    }
+    } catch { /* no spinner */ }
 
     try {
       await Promise.race([
-        page.waitForSelector(ITAKA_SELECTORS.offerCard, { timeout: ITAKA_CONFIG.resultsTimeout }),
-        page.waitForSelector(ITAKA_SELECTORS.noResults, { timeout: ITAKA_CONFIG.resultsTimeout }),
+        page.waitForSelector(ITAKA_SELECTORS.offerCard, { timeout: 15_000 }),
+        page.waitForSelector(ITAKA_SELECTORS.noResults, { timeout: 15_000 }),
       ]);
     } catch {
       logger.warn('Timeout waiting for Itaka results', undefined, 'itaka');
@@ -125,11 +151,6 @@ export class ItakaScraper extends BaseScraper {
 
   protected async goToNextPage(page: Page): Promise<boolean> {
     try {
-      // Itaka has explicit pagination
-      const currentUrl = page.url();
-      const urlObj = new URL(currentUrl);
-      const currentPage = parseInt(urlObj.searchParams.get('page') ?? '1', 10);
-
       const loadMoreBtn = page.locator(ITAKA_SELECTORS.loadMoreBtn).first();
       if (await loadMoreBtn.isVisible({ timeout: 2000 })) {
         await loadMoreBtn.scrollIntoViewIfNeeded();
@@ -138,17 +159,15 @@ export class ItakaScraper extends BaseScraper {
         return true;
       }
 
-      // Try URL-based pagination
+      // URL-based pagination
+      const currentUrl = page.url();
+      const urlObj = new URL(currentUrl);
+      const currentPage = parseInt(urlObj.searchParams.get('page') ?? '1', 10);
       urlObj.searchParams.set('page', (currentPage + 1).toString());
-      const nextUrl = urlObj.toString();
-
-      // Navigate to next page
-      await page.goto(nextUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.goto(urlObj.toString(), { waitUntil: 'networkidle', timeout: 30000 });
       await jitteredDelay(1500, 500);
 
-      // Check if we got new results (not a redirect back to page 1)
-      const newUrlObj = new URL(page.url());
-      const newPage = parseInt(newUrlObj.searchParams.get('page') ?? '1', 10);
+      const newPage = parseInt(new URL(page.url()).searchParams.get('page') ?? '1', 10);
       return newPage > currentPage;
     } catch {
       return false;
