@@ -1,0 +1,49 @@
+name: Scrape vacation offers
+
+on:
+  schedule:
+    - cron: '0 6 * * *'    # Codziennie o 6:00 UTC (8:00 PL)
+    - cron: '0 18 * * *'   # I o 18:00 UTC (20:00 PL)
+  workflow_dispatch:         # Manualnie z GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @wakacje/scrapers exec playwright install chromium --with-deps
+
+      - name: Run scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SCRAPE_AIRPORTS: KTW,KRK
+          SCRAPE_NIGHTS_MIN: 7
+          SCRAPE_NIGHTS_MAX: 14
+          SCRAPE_ADULTS: 2
+          SCRAPE_STARS: 4,5
+          SCRAPER_HEADLESS: true
+          SCRAPER_DELAY_MS: 2500
+          ENABLE_ENRICHMENT: true
+        run: |
+          export TODAY=$(date -u +%Y-%m-%d)
+          export IN_90_DAYS=$(date -u -d '+90 days' +%Y-%m-%d)
+          export SCRAPE_DATE_FROM=$TODAY
+          export SCRAPE_DATE_TO=$IN_90_DAYS
+          pnpm scrape
