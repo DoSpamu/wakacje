@@ -68,7 +68,8 @@ LEFT JOIN providers             p  ON p.id  = o.provider_id
 LEFT JOIN destinations          d  ON d.id  = o.destination_id
 LEFT JOIN hotels                h  ON h.id  = o.hotel_id
 LEFT JOIN hotel_reviews_summary ta ON ta.hotel_id = o.hotel_id AND ta.source = 'tripadvisor'
-LEFT JOIN hotel_reviews_summary g  ON g.hotel_id  = o.hotel_id AND g.source  = 'google';
+LEFT JOIN hotel_reviews_summary g  ON g.hotel_id  = o.hotel_id AND g.source  = 'google'
+WHERE o.departure_date >= CURRENT_DATE;
 
 -- ── hotel_price_comparison ──────────────────────────────────
 -- For each hotel: all providers + their best price for same period
@@ -88,7 +89,7 @@ SELECT
   ta.food_score     AS food_score,
   ta.sentiment_tags AS tags
 FROM hotels h
-JOIN offers o          ON o.hotel_id    = h.id AND o.is_available = TRUE
+JOIN offers o          ON o.hotel_id    = h.id AND o.is_available = TRUE AND o.departure_date >= CURRENT_DATE
 JOIN providers p       ON p.id          = o.provider_id
 LEFT JOIN destinations d ON d.id         = h.destination_id
 LEFT JOIN hotel_reviews_summary ta ON ta.hotel_id = h.id AND ta.source = 'tripadvisor'

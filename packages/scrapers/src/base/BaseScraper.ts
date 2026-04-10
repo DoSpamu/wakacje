@@ -153,7 +153,7 @@ export abstract class BaseScraper {
     let pages = 0;
 
     logger.info(`Navigating to ${url}`, undefined, this.providerCode);
-    await page.goto(url, { waitUntil: 'networkidle', timeout: this.config.timeout });
+    await page.goto(url, { waitUntil: 'load', timeout: this.config.timeout });
     await jitteredDelay(1500, 1000);
 
     // Save snapshot if enabled

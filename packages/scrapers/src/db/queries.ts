@@ -321,6 +321,26 @@ export async function expireStuckRuns(): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
+/**
+ * After a successful scrape, mark all previous offers from this provider
+ * as unavailable. This ensures the DB stays fresh — old runs don't pollute results.
+ */
+export async function markProviderOffersUnavailable(
+  providerId: string,
+  currentSearchRunId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('offers')
+    .update({ is_available: false })
+    .eq('provider_id', providerId)
+    .eq('is_available', true)
+    .neq('search_run_id', currentSearchRunId);
+
+  if (error) {
+    logger.warn('Failed to mark old offers unavailable', { error: error.message, providerId });
+  }
+}
+
 export async function recalculateScores(): Promise<number> {
   try {
     const { data, error } = await supabase.rpc('recalculate_composite_scores');

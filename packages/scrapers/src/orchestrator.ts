@@ -41,6 +41,7 @@ import {
   upsertHotel,
   upsertHotelAlias,
   insertOffers,
+  markProviderOffersUnavailable,
   upsertHotelReviewSummary,
   insertHotelPhotos,
   updateHotelMedia,
@@ -328,11 +329,13 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
       const validOffers = normalizedOffers.filter(Boolean) as NonNullable<typeof normalizedOffers[0]>[];
 
       if (validOffers.length > 0) {
-        // Compute scores before inserting
-        // (In a real scenario, we'd fetch review data and compute)
         const inserted = await insertOffers(validOffers);
         totalOffersInserted += inserted;
         logger.info(`Inserted ${inserted} offers for ${providerCode}`);
+
+        // Mark old offers from this provider as unavailable — keeps DB fresh
+        await markProviderOffersUnavailable(providerId, searchRunId);
+        logger.info(`Expired old offers for ${providerCode}`);
       }
     }
   } finally {
