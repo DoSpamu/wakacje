@@ -54,6 +54,7 @@ export default async function HotelPage({ params }: Props) {
     service_score: number | null;
     beach_score: number | null;
     sentiment_tags: string[];
+    review_snippets: Array<{ text: string; rating: number | null }>;
     scraped_at: string;
   }>;
 
@@ -199,6 +200,23 @@ export default async function HotelPage({ params }: Props) {
                 <div className="flex flex-wrap gap-1.5 mt-4">
                   {taReview.sentiment_tags.map((tag) => (
                     <span key={tag} className="badge bg-slate-100 text-slate-600 text-xs">{tag}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* Review snippets */}
+              {(taReview.review_snippets ?? []).length > 0 && (
+                <div className="mt-4 space-y-2.5">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Opinie gości</h3>
+                  {taReview.review_snippets.map((s, i) => (
+                    <blockquote key={i} className="rounded-lg bg-slate-50 px-3 py-2.5 border-l-2 border-green-300">
+                      <p className="text-xs text-slate-700 leading-relaxed">{s.text}</p>
+                      {s.rating !== null && (
+                        <div className="mt-1 text-xs text-slate-400">
+                          {'★'.repeat(Math.round(s.rating))}{'☆'.repeat(5 - Math.round(s.rating))}
+                        </div>
+                      )}
+                    </blockquote>
                   ))}
                 </div>
               )}
