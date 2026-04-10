@@ -138,9 +138,9 @@ export default async function HotelPage({ params }: Props) {
           </div>
 
           {taReview && (
-            <div className={`score-pill text-base ${getScoreClass(
+            <div className={getScoreClass(
               Math.round((taReview.overall_rating ?? 3) * 20)
-            )}`}>
+            )}>
               {formatRating(taReview.overall_rating)} / 5
             </div>
           )}

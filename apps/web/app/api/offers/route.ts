@@ -16,6 +16,12 @@ export async function GET(req: NextRequest) {
     .select('*', { count: 'exact' })
     .eq('is_available', true);
 
+  // Direct ID lookup (used by compare page)
+  const ids = sp.get('ids')?.split(',').filter(Boolean);
+  if (ids?.length) {
+    query = query.in('id', ids);
+  }
+
   // Destination filter
   const destinations = sp.get('destinations')?.split(',').filter(Boolean);
   if (destinations?.length) query = query.in('destination_canonical', destinations);
