@@ -63,12 +63,35 @@ export async function parseItakaNextData(page: Page): Promise<RawOffer[]> {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const props = (nextData as any)?.props?.pageProps;
-    // Log top-level keys to help diagnose structure changes
-    logger.debug('Itaka __NEXT_DATA__ pageProps keys', { keys: props ? Object.keys(props).slice(0, 10) : 'null' }, 'itaka');
-    const offerList = props?.offers ?? props?.searchResults?.offers ?? props?.results ?? props?.data?.offers ?? [];
+    if (!props) return offers;
 
-    logger.debug(`Itaka offerList length: ${Array.isArray(offerList) ? offerList.length : 'not array'}`, undefined, 'itaka');
-    if (!Array.isArray(offerList)) return offers;
+    // Itaka uses React Query — results are in initialQueryState cache
+    // Structure: props.initialQueryState.queries[].state.data.offers (or .results)
+    let offerList: unknown[] = [];
+
+    // Method 1: Direct props fields (older Itaka versions)
+    offerList = props?.offers ?? props?.searchResults?.offers ?? props?.results ?? props?.data?.offers ?? [];
+
+    // Method 2: React Query initialQueryState cache
+    if (offerList.length === 0 && props?.initialQueryState) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const queryState = props.initialQueryState as any;
+      const queries: unknown[] = queryState?.queries ?? (Array.isArray(queryState) ? queryState : []);
+
+      for (const q of queries) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = (q as any)?.state?.data;
+        const candidates = data?.offers ?? data?.results ?? data?.data?.offers ?? data?.items ?? [];
+        if (Array.isArray(candidates) && candidates.length > 0) {
+          offerList = candidates;
+          logger.debug(`Itaka: found ${offerList.length} offers in React Query cache`, undefined, 'itaka');
+          break;
+        }
+      }
+    }
+
+    logger.debug(`Itaka offerList length: ${offerList.length}`, undefined, 'itaka');
+    if (!Array.isArray(offerList) || offerList.length === 0) return offers;
 
     for (const raw of offerList) {
       try {
