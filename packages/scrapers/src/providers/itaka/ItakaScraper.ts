@@ -38,38 +38,38 @@ export class ItakaScraper extends BaseScraper {
     const destinations = itakaDests.length > 0 ? itakaDests : [''];
 
     for (const dest of destinations) {
-      const params = new URLSearchParams();
-
-      params.set('dateFrom', formatDate(filter.departureDateFrom));
-      params.set('dateTo', formatDate(filter.departureDateTo));
-      params.set('departuresByPlane', filter.departureAirports.join(','));
-      params.set('durationMin', filter.nights.min.toString());
-      params.set('durationMax', filter.nights.max.toString());
-      params.set('participants[0][adults]', filter.adults.toString());
+      // Build query string manually — URLSearchParams encodes [] to %5B%5D
+      // but Itaka's Next.js router requires literal brackets for participants[0][adults]
+      const enc = encodeURIComponent;
+      const parts: string[] = [
+        `dateFrom=${enc(formatDate(filter.departureDateFrom))}`,
+        `dateTo=${enc(formatDate(filter.departureDateTo))}`,
+        `departuresByPlane=${enc(filter.departureAirports.join(','))}`,
+        `durationMin=${filter.nights.min}`,
+        `durationMax=${filter.nights.max}`,
+        `participants[0][adults]=${filter.adults}`,
+      ];
 
       if (filter.children > 0) {
-        params.set('participants[0][children]', filter.children.toString());
+        parts.push(`participants[0][children]=${filter.children}`);
       }
 
       const starValues = filter.hotelStars
         .map((s) => ITAKA_STARS_MAP[s])
         .filter(Boolean) as string[];
       if (starValues.length > 0) {
-        params.set('minHotelCategory', starValues[0]!);
+        parts.push(`minHotelCategory=${starValues[0]!}`);
       }
 
       const boardValues = filter.boardTypes
         .map((b) => ITAKA_BOARD_MAP[b])
         .filter(Boolean) as string[];
       if (boardValues.length > 0) {
-        params.set('boardType', boardValues.join(','));
+        parts.push(`boardType=${enc(boardValues.join(','))}`);
       }
 
-      // Destination slug goes in path (Next.js route param), NOT as query param
-      const url = dest
-        ? `${baseUrl}${dest}/?${params.toString()}`
-        : `${baseUrl}?${params.toString()}`;
-
+      const qs = parts.join('&');
+      const url = dest ? `${baseUrl}${dest}/?${qs}` : `${baseUrl}?${qs}`;
       urls.push(url);
     }
 
@@ -128,14 +128,9 @@ export class ItakaScraper extends BaseScraper {
   }
 
   protected async waitForResults(page: Page): Promise<void> {
-    // Wait for networkidle — let all XHR calls complete
-    try {
-      await page.waitForLoadState('networkidle', { timeout: ITAKA_CONFIG.resultsTimeout });
-    } catch {
-      // continue
-    }
-
-    await jitteredDelay(2000, 500);
+    // Give the React app time to hydrate and fire API/data calls.
+    // networkidle never fires on Itaka — use a fixed settle time instead.
+    await jitteredDelay(5000, 2000);
 
     try {
       await page.waitForSelector(ITAKA_SELECTORS.loadingSpinner, {

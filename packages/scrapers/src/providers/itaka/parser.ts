@@ -56,12 +56,18 @@ export async function parseItakaNextData(page: Page): Promise<RawOffer[]> {
       return null;
     });
 
-    if (!nextData) return offers;
+    if (!nextData) {
+      logger.debug('Itaka __NEXT_DATA__ not found', undefined, 'itaka');
+      return offers;
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const props = (nextData as any)?.props?.pageProps;
-    const offerList = props?.offers ?? props?.searchResults?.offers ?? props?.results ?? [];
+    // Log top-level keys to help diagnose structure changes
+    logger.debug('Itaka __NEXT_DATA__ pageProps keys', { keys: props ? Object.keys(props).slice(0, 10) : 'null' }, 'itaka');
+    const offerList = props?.offers ?? props?.searchResults?.offers ?? props?.results ?? props?.data?.offers ?? [];
 
+    logger.debug(`Itaka offerList length: ${Array.isArray(offerList) ? offerList.length : 'not array'}`, undefined, 'itaka');
     if (!Array.isArray(offerList)) return offers;
 
     for (const raw of offerList) {
