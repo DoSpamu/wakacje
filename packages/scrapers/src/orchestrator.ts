@@ -44,6 +44,7 @@ import {
   upsertHotelReviewSummary,
   insertHotelPhotos,
   updateHotelMedia,
+  expireStuckRuns,
   insertScrapeLogs,
 } from './db/queries.js';
 import { logger } from './base/logger.js';
@@ -89,6 +90,9 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
   const providers = options.providers ?? ALL_PROVIDERS;
   const runEnrichment = options.runEnrichment ?? true;
   const concurrency = options.concurrency ?? 2;
+
+  // Auto-expire stuck runs from previous failed scrapes
+  await expireStuckRuns();
 
   logger.info('Starting scrape orchestration', {
     providers,

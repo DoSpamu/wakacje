@@ -30,6 +30,8 @@ export interface OfferRow {
   destination_display: string | null;
   country_code: string | null;
   hotel_canonical_name: string | null;
+  hotel_photo_url: string | null;
+  hotel_youtube_id: string | null;
   tripadvisor_rating: number | null;
   tripadvisor_reviews: number | null;
   tripadvisor_food_score: number | null;

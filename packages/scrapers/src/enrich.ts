@@ -8,6 +8,7 @@
  * Usage:
  *   pnpm enrich               # enrich all hotels missing enrichment
  *   pnpm enrich 20            # enrich at most 20 hotels
+ *   pnpm enrich 20 --force    # re-enrich even if already done
  *
  * Required env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Optional env vars: YOUTUBE_API_KEY, SCRAPER_HEADLESS, ENRICHMENT_DELAY_MS
@@ -30,34 +31,32 @@ async function main() {
 
   console.info(`\n🔍 Enrichment run — limit: ${limitArg}, force: ${forceArg}\n`);
 
-  // Fetch hotels that need enrichment
-  let query = supabase
-    .from('hotels')
-    .select(
-      `id, canonical_name, location_city,
-       destinations(canonical_name),
-       hotel_reviews_summary(id)`,
-    )
-    .limit(limitArg);
-
+  // Step 1: find hotel IDs that already have a TripAdvisor review
+  const alreadyEnrichedIds = new Set<string>();
   if (!forceArg) {
-    // Only hotels without a TripAdvisor review yet
-    query = query.is('hotel_reviews_summary.id', null);
+    const { data: existing } = await supabase
+      .from('hotel_reviews_summary')
+      .select('hotel_id')
+      .eq('source', 'tripadvisor');
+    for (const row of existing ?? []) alreadyEnrichedIds.add(row.hotel_id);
   }
 
-  const { data: hotels, error } = await query;
+  // Step 2: fetch hotels
+  const { data: hotels, error } = await supabase
+    .from('hotels')
+    .select(
+      'id, canonical_name, location_city, destinations(canonical_name)',
+    )
+    .limit(forceArg ? limitArg : limitArg + alreadyEnrichedIds.size); // over-fetch so we can filter
 
   if (error) {
     console.error('Failed to fetch hotels:', error.message);
     process.exit(1);
   }
 
-  const hotelList = (hotels ?? []).filter((h) => {
-    // When joining, hotel_reviews_summary may be an array — skip if it has data (unless forced)
-    if (forceArg) return true;
-    const reviews = h.hotel_reviews_summary as unknown as Array<unknown> | null;
-    return !reviews || reviews.length === 0;
-  });
+  const hotelList = (hotels ?? [])
+    .filter((h) => forceArg || !alreadyEnrichedIds.has(h.id))
+    .slice(0, limitArg);
 
   if (hotelList.length === 0) {
     console.info('No hotels need enrichment.');
@@ -86,15 +85,17 @@ async function main() {
 
         if (result.tripadvisor) {
           await upsertHotelReviewSummary({ hotelId: hotel.id, ...result.tripadvisor });
-          console.info(`     TA: ${result.tripadvisor.overallRating ?? '?'}/5, ${result.tripadvisor.reviewCount ?? 0} reviews`);
+          console.info(
+            `     TA: ${result.tripadvisor.overallRating ?? '?'}/5, ${result.tripadvisor.reviewCount ?? 0} opinii`,
+          );
         } else {
-          console.info('     TA: no data');
+          console.info('     TA: brak danych');
         }
 
         if (result.photos.length > 0) {
           await insertHotelPhotos(hotel.id, result.photos);
           await updateHotelMedia(hotel.id, { coverPhotoUrl: result.photos[0] });
-          console.info(`     Photos: ${result.photos.length} saved`);
+          console.info(`     Zdjęcia: ${result.photos.length} zapisanych`);
         }
 
         if (ytEnricher.isAvailable()) {
@@ -107,7 +108,7 @@ async function main() {
 
         enriched++;
       } catch (err) {
-        console.warn(`     ⚠ Failed: ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(`     ⚠ Błąd: ${err instanceof Error ? err.message : String(err)}`);
         failed++;
       }
     }
@@ -116,14 +117,11 @@ async function main() {
   }
 
   const logs = logger.flushBuffer();
-  if (logs.length > 0) {
-    // Persist any logged warnings/errors
-    for (const l of logs.filter((x) => x.level === 'warn' || x.level === 'error')) {
-      console.warn(`[${l.level}] ${l.message}`);
-    }
+  for (const l of logs.filter((x) => x.level === 'warn' || x.level === 'error')) {
+    console.warn(`[${l.level}] ${l.message}`);
   }
 
-  console.info(`\n✅ Done — enriched: ${enriched}, failed: ${failed}`);
+  console.info(`\n✅ Gotowe — wzbogacono: ${enriched}, błędy: ${failed}`);
   process.exit(failed > 0 ? 1 : 0);
 }
 

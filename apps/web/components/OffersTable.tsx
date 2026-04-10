@@ -135,22 +135,35 @@ export default function OffersTable({
               </td>
 
               {/* Hotel name */}
-              <td className="min-w-[180px]">
-                <div className="font-medium text-slate-900">
-                  {offer.hotel_id ? (
-                    <Link
-                      href={`/hotels/${offer.hotel_id}`}
-                      className="hover:text-blue-600 hover:underline"
-                    >
-                      {offer.hotel_name}
-                    </Link>
-                  ) : (
-                    offer.hotel_name
+              <td className="min-w-[200px]">
+                <div className="flex items-center gap-2">
+                  {offer.hotel_photo_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={offer.hotel_photo_url}
+                      alt=""
+                      className="w-10 h-10 rounded object-cover flex-shrink-0 bg-slate-100"
+                      loading="lazy"
+                    />
                   )}
+                  <div>
+                    <div className="font-medium text-slate-900">
+                      {offer.hotel_id ? (
+                        <Link
+                          href={`/hotels/${offer.hotel_id}`}
+                          className="hover:text-blue-600 hover:underline"
+                        >
+                          {offer.hotel_name}
+                        </Link>
+                      ) : (
+                        offer.hotel_name
+                      )}
+                    </div>
+                    {offer.hotel_location && (
+                      <div className="text-xs text-slate-400 mt-0.5">{offer.hotel_location}</div>
+                    )}
+                  </div>
                 </div>
-                {offer.hotel_location && (
-                  <div className="text-xs text-slate-400 mt-0.5">{offer.hotel_location}</div>
-                )}
               </td>
 
               {/* Country / Airport */}

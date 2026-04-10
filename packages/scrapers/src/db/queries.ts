@@ -312,6 +312,16 @@ export async function insertScrapeLogs(
 }
 
 // ─────────────────────────────────────────────
+//  Maintenance
+// ─────────────────────────────────────────────
+
+export async function expireStuckRuns(): Promise<void> {
+  try {
+    await supabase.rpc('expire_stuck_search_runs');
+  } catch { /* non-fatal */ }
+}
+
+// ─────────────────────────────────────────────
 //  Hotel media (photos + YouTube)
 // ─────────────────────────────────────────────
 

@@ -18,11 +18,15 @@ on:
         description: 'Date to (YYYY-MM-DD, default: today+90d)'
         required: false
         default: ''
+      enrich_limit:
+        description: 'Max hotels to enrich after scrape (0 = skip enrichment step)'
+        required: false
+        default: '30'
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +43,27 @@ jobs:
 
       - name: Install Playwright browsers
         run: pnpm --filter @wakacje/scrapers exec playwright install chromium --with-deps
+
+      - name: Cleanup stuck search runs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node --import=tsx/esm -e "
+          import('dotenv/config').then(async () => {
+            const { createClient } = await import('@supabase/supabase-js');
+            const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            const { error, count } = await sb
+              .from('search_runs')
+              .update({ status: 'failed', error_message: 'Auto-expired: timed out', completed_at: new Date().toISOString() })
+              .eq('status', 'running')
+              .lt('started_at', new Date(Date.now() - 2 * 3600_000).toISOString())
+              .select('id', { count: 'exact', head: true });
+            if (error) console.error('Cleanup error:', error.message);
+            else console.log('Expired stuck runs:', count ?? 0);
+          });
+          "
+        working-directory: packages/scrapers
 
       - name: Set date range
         id: dates
@@ -62,11 +87,24 @@ jobs:
           SCRAPE_STARS: 4,5
           SCRAPER_HEADLESS: true
           SCRAPER_DELAY_MS: 2500
-          ENABLE_ENRICHMENT: true
+          ENABLE_ENRICHMENT: false
           SCRAPE_DATE_FROM: ${{ steps.dates.outputs.date_from }}
           SCRAPE_DATE_TO: ${{ steps.dates.outputs.date_to }}
         run: |
           PROVIDERS="${{ inputs.providers || 'all' }}"
-          # Run node directly (avoid --env-file flag which requires a .env file on disk)
           node --import=tsx/esm src/run.ts "$PROVIDERS"
+        working-directory: packages/scrapers
+
+      - name: Enrich hotels (TripAdvisor + YouTube)
+        if: ${{ inputs.enrich_limit != '0' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          SCRAPER_HEADLESS: true
+          ENRICHMENT_DELAY_MS: 4000
+        run: |
+          LIMIT="${{ inputs.enrich_limit || '30' }}"
+          echo "Enriching up to $LIMIT hotels..."
+          node --import=tsx/esm src/enrich.ts "$LIMIT" || true
         working-directory: packages/scrapers
