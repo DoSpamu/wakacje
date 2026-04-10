@@ -22,6 +22,7 @@ import {
   upsertHotelReviewSummary,
   insertHotelPhotos,
   updateHotelMedia,
+  recalculateScores,
 } from './db/queries.js';
 import { logger } from './base/logger.js';
 
@@ -119,6 +120,13 @@ async function main() {
   const logs = logger.flushBuffer();
   for (const l of logs.filter((x) => x.level === 'warn' || x.level === 'error')) {
     console.warn(`[${l.level}] ${l.message}`);
+  }
+
+  // Recalculate composite scores now that reviews are available
+  if (enriched > 0) {
+    process.stdout.write('\nPrzeliczam composite scores...');
+    const updated = await recalculateScores();
+    console.info(` zaktualizowano ${updated} ofert`);
   }
 
   console.info(`\n✅ Gotowe — wzbogacono: ${enriched}, błędy: ${failed}`);

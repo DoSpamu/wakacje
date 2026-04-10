@@ -45,6 +45,7 @@ import {
   insertHotelPhotos,
   updateHotelMedia,
   expireStuckRuns,
+  recalculateScores,
   insertScrapeLogs,
 } from './db/queries.js';
 import { logger } from './base/logger.js';
@@ -337,6 +338,11 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
   } finally {
     if (enricher) await enricher.close();
   }
+
+  // Recalculate composite scores after all inserts + enrichment
+  logger.info('Recalculating composite scores...');
+  const scoresUpdated = await recalculateScores();
+  logger.info(`Scores updated for ${scoresUpdated} offers`);
 
   const durationMs = Date.now() - startTime;
 

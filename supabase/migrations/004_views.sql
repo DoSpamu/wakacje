@@ -42,8 +42,10 @@ SELECT
   d.display_name AS destination_display,
   d.country_code,
 
-  -- Hotel canonical name
-  h.canonical_name AS hotel_canonical_name,
+  -- Hotel info + media
+  h.canonical_name   AS hotel_canonical_name,
+  h.cover_photo_url  AS hotel_photo_url,
+  h.youtube_video_id AS hotel_youtube_id,
 
   -- TripAdvisor review data
   ta.overall_rating AS tripadvisor_rating,

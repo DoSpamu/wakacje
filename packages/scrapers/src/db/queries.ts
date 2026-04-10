@@ -321,6 +321,20 @@ export async function expireStuckRuns(): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
+export async function recalculateScores(): Promise<number> {
+  try {
+    const { data, error } = await supabase.rpc('recalculate_composite_scores');
+    if (error) {
+      logger.warn('Score recalculation failed', { error: error.message });
+      return 0;
+    }
+    return (data as number) ?? 0;
+  } catch (err) {
+    logger.warn('Score recalculation error', { error: String(err) });
+    return 0;
+  }
+}
+
 // ─────────────────────────────────────────────
 //  Hotel media (photos + YouTube)
 // ─────────────────────────────────────────────
