@@ -65,6 +65,8 @@ export async function parseItakaNextData(page: Page): Promise<RawOffer[]> {
     const props = (nextData as any)?.props?.pageProps;
     if (!props) return offers;
 
+    logger.debug(`Itaka pageProps.hasServerError: ${props.hasServerError}`, undefined, 'itaka');
+
     // Itaka uses React Query — results are in initialQueryState cache
     // Structure: props.initialQueryState.queries[].state.data.offers (or .results)
     let offerList: unknown[] = [];
@@ -76,15 +78,32 @@ export async function parseItakaNextData(page: Page): Promise<RawOffer[]> {
     if (offerList.length === 0 && props?.initialQueryState) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const queryState = props.initialQueryState as any;
-      const queries: unknown[] = queryState?.queries ?? (Array.isArray(queryState) ? queryState : []);
 
-      for (const q of queries) {
+      // Log structure for debugging
+      const iqsType = Array.isArray(queryState) ? 'array' : typeof queryState;
+      const iqsKeys = (queryState && typeof queryState === 'object' && !Array.isArray(queryState))
+        ? Object.keys(queryState).slice(0, 10).join(',')
+        : String(iqsType);
+      logger.debug(`Itaka initialQueryState type=${iqsType} keys=[${iqsKeys}]`, undefined, 'itaka');
+
+      const queries: unknown[] = queryState?.queries ?? (Array.isArray(queryState) ? queryState : []);
+      logger.debug(`Itaka React Query: ${queries.length} queries`, undefined, 'itaka');
+
+      for (let qi = 0; qi < queries.length; qi++) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data = (q as any)?.state?.data;
-        const candidates = data?.offers ?? data?.results ?? data?.data?.offers ?? data?.items ?? [];
+        const q = queries[qi] as any;
+        const qKey = JSON.stringify(q?.queryKey ?? q?.key ?? '').slice(0, 80);
+        const stateStatus = q?.state?.status ?? q?.status ?? 'unknown';
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = q?.state?.data as any;
+        const dataKeys = (data && typeof data === 'object') ? Object.keys(data).slice(0, 8).join(',') : String(data);
+        logger.debug(`Itaka query[${qi}] key=${qKey} status=${stateStatus} dataKeys=[${dataKeys}]`, undefined, 'itaka');
+
+        const candidates = data?.offers ?? data?.results ?? data?.data?.offers ?? data?.items
+          ?? data?.searchResults?.offers ?? data?.pages?.[0]?.offers ?? [];
         if (Array.isArray(candidates) && candidates.length > 0) {
           offerList = candidates;
-          logger.debug(`Itaka: found ${offerList.length} offers in React Query cache`, undefined, 'itaka');
+          logger.debug(`Itaka: found ${offerList.length} offers in React Query cache (query[${qi}])`, undefined, 'itaka');
           break;
         }
       }
