@@ -82,7 +82,8 @@ export class ItakaScraper extends BaseScraper {
 
     if (!this.context) return;
 
-    // Intercept all JSON responses — Itaka loads offers via XHR after page render
+    // Intercept Next.js _next/data responses as a supplemental capture mechanism.
+    // Primary parsing is via __NEXT_DATA__ (SSR); this catches client-side navigations.
     const tryIntercept = async (route: Route) => {
       let response;
       try {
@@ -96,9 +97,9 @@ export class ItakaScraper extends BaseScraper {
         const ct = response.headers()['content-type'] ?? '';
         if (ct.includes('json')) {
           const json = await response.json();
-          const offers = parseItakaApiResponse(json);
+          const offers = parseItakaApiResponse(json, route.request().url());
           if (offers.length > 0) {
-            logger.debug(`Intercepted ${offers.length} Itaka offers from API`, undefined, 'itaka');
+            logger.debug(`Intercepted ${offers.length} Itaka offers from ${route.request().url().slice(0, 120)}`, undefined, 'itaka');
             this.interceptedOffers.push(...offers);
           }
         }
@@ -115,6 +116,9 @@ export class ItakaScraper extends BaseScraper {
     await this.context.route('**/oferty**', handler);
     await this.context.route('**/wyniki**', handler);
     await this.context.route('**/*.json*', handler);
+    await this.context.route('**/oferta**', handler);
+    await this.context.route('**/holiday**', handler);
+    await this.context.route('**/wakacje**', handler);
   }
 
   protected async parsePage(page: Page, url: string): Promise<RawOffer[]> {
