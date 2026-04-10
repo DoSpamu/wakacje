@@ -41,11 +41,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Install Playwright browsers
-        run: pnpm --filter @wakacje/scrapers exec playwright install chromium --with-deps
-
-      - name: Install Patchright browser
-        run: pnpm --filter @wakacje/scrapers exec patchright install chromium
+      - name: Install Patchright browser + system deps
+        run: pnpm --filter @wakacje/scrapers exec patchright install chromium --with-deps
 
       - name: Cleanup stuck search runs
         env:
