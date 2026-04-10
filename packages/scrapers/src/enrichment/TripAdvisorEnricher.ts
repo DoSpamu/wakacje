@@ -50,9 +50,9 @@ export class TripAdvisorEnricher {
 
   constructor() {
     this.rateLimiter = new RateLimiter({
-      requestsPerWindow: 5,
+      requestsPerWindow: 12,
       windowMs: 60_000,
-      minDelayMs: parseInt(process.env['ENRICHMENT_DELAY_MS'] ?? '3000', 10),
+      minDelayMs: parseInt(process.env['ENRICHMENT_DELAY_MS'] ?? '1500', 10),
     });
   }
 
@@ -124,7 +124,7 @@ export class TripAdvisorEnricher {
       const searchQuery = encodeURIComponent(`${hotelName} ${location} hotel`);
       const searchUrl = `https://www.tripadvisor.com/Search?q=${searchQuery}`;
 
-      await page.goto(searchUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await jitteredDelay(2000, 1000);
 
       // Accept cookies if asked
@@ -153,7 +153,7 @@ export class TripAdvisorEnricher {
 
       // Step 3: Navigate to hotel page
       await this.rateLimiter.acquire();
-      await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await jitteredDelay(2000, 1000);
 
       // Step 4: Extract rating data and photos
