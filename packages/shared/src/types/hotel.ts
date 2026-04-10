@@ -26,6 +26,11 @@ export interface HotelAlias {
   createdAt: string;
 }
 
+export interface ReviewSnippet {
+  text: string;
+  rating: number | null;
+}
+
 export interface HotelReviewSummary {
   id: string;
   hotelId: string;
@@ -40,6 +45,7 @@ export interface HotelReviewSummary {
   serviceScore: number | null;
   beachScore: number | null;
   sentimentTags: string[];
+  reviewSnippets: ReviewSnippet[];
   scrapedAt: string;
   createdAt: string;
 }

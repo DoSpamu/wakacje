@@ -63,6 +63,27 @@ export interface UIFilter {
   sortOrder: 'asc' | 'desc';
 }
 
+/** Live search result — returned by /api/live-search (no DB IDs, no enrichment) */
+export interface LiveOffer {
+  id: string;
+  providerCode: 'itaka';
+  hotelName: string;
+  hotelStars: number;
+  hotelLocation: string;
+  destinationRaw: string;
+  departureAirport: string;
+  departureDate: string;
+  returnDate: string;
+  nights: number;
+  boardType: string;
+  priceTotal: number;
+  pricePerPerson: number;
+  currency: string;
+  adults: number;
+  children: number;
+  sourceUrl: string;
+}
+
 export interface ScrapeRunRow {
   id: string;
   provider_code: string;

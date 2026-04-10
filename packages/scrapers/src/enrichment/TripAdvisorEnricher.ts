@@ -219,6 +219,9 @@ export class TripAdvisorEnricher {
         overallRating,
       });
 
+      // Extract up to 5 review snippets (actual review text)
+      const reviewSnippets = await this.extractReviewSnippets(page);
+
       return {
         source: 'tripadvisor',
         overallRating,
@@ -231,12 +234,66 @@ export class TripAdvisorEnricher {
         serviceScore,
         beachScore: null,
         sentimentTags,
+        reviewSnippets,
         scrapedAt: new Date().toISOString(),
       };
     } catch (err) {
       logger.warn('Failed to extract TripAdvisor rating data', { error: String(err) });
       return null;
     }
+  }
+
+  private async extractReviewSnippets(
+    page: Page,
+  ): Promise<Array<{ text: string; rating: number | null }>> {
+    const snippets: Array<{ text: string; rating: number | null }> = [];
+    try {
+      // TripAdvisor review card selectors — try multiple patterns
+      const reviewCardSel = [
+        '[data-automation="reviewCard"]',
+        '[class*="review_container"]',
+        '[class*="ReviewCard"]',
+      ].join(', ');
+
+      const cards = page.locator(reviewCardSel);
+      const count = Math.min(await cards.count(), 5);
+
+      for (let i = 0; i < count; i++) {
+        const card = cards.nth(i);
+
+        // Extract review text
+        const textEl = card
+          .locator('[data-automation="reviewText"], [class*="reviewText"], [class*="review-text"]')
+          .first();
+        let text = '';
+        try {
+          text = (await textEl.innerText({ timeout: 2000 })).trim();
+        } catch {
+          // fallback: whole card text, first 300 chars
+          try {
+            text = (await card.innerText({ timeout: 2000 })).trim().slice(0, 300);
+          } catch { /* skip */ }
+        }
+
+        if (!text || text.length < 20) continue;
+
+        // Try to get per-review bubble rating (class "bubble_NN" → N.N)
+        let rating: number | null = null;
+        try {
+          const bubbleCls = await card
+            .locator('[class*="ui_bubble_rating"], [class*="bubble_rating"]')
+            .first()
+            .getAttribute('class', { timeout: 1500 });
+          const m = bubbleCls ? /bubble_(\d+)/.exec(bubbleCls) : null;
+          if (m) rating = parseInt(m[1]!, 10) / 10;
+        } catch { /* no per-review rating */ }
+
+        snippets.push({ text: text.slice(0, 400), rating });
+      }
+    } catch {
+      // extraction failed — return whatever we have
+    }
+    return snippets;
   }
 
   private async extractSentimentTags(

@@ -255,6 +255,7 @@ export async function upsertHotelReviewSummary(review: {
   serviceScore: number | null;
   beachScore: number | null;
   sentimentTags: string[];
+  reviewSnippets?: Array<{ text: string; rating: number | null }>;
   scrapedAt: string;
 }): Promise<void> {
   const { error } = await supabase.from('hotel_reviews_summary').upsert(
@@ -271,6 +272,7 @@ export async function upsertHotelReviewSummary(review: {
       service_score: review.serviceScore,
       beach_score: review.beachScore,
       sentiment_tags: review.sentimentTags,
+      review_snippets: review.reviewSnippets ?? [],
       scraped_at: review.scrapedAt,
     },
     { onConflict: 'hotel_id,source' },
