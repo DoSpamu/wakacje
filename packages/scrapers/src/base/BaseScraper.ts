@@ -49,6 +49,7 @@ export abstract class BaseScraper {
       viewport: { width: 1366, height: 768 },
       locale: 'pl-PL',
       timezoneId: 'Europe/Warsaw',
+      ignoreHTTPSErrors: true, // some providers embed 3rd-party widgets with self-signed/missing certs
       extraHTTPHeaders: {
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
       },

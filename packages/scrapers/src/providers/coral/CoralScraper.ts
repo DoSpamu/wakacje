@@ -38,6 +38,7 @@ export class CoralScraper extends BaseScraper {
       viewport: { width: 1366, height: 768 },
       locale: 'pl-PL',
       timezoneId: 'Europe/Warsaw',
+      ignoreHTTPSErrors: true,  // dertouristik.cz has cert issues on CI
       extraHTTPHeaders: {
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -67,7 +68,14 @@ export class CoralScraper extends BaseScraper {
 
     // Intercept Coral Travel API responses
     await this.context.route('**/api/**', async (route: Route) => {
-      const response = await route.fetch();
+      let response;
+      try {
+        response = await route.fetch();
+      } catch {
+        // SSL / network error — let the browser handle it natively
+        await route.continue().catch(() => undefined);
+        return;
+      }
       try {
         const json = await response.json();
         const offers = parseCoralApiResponse(json);

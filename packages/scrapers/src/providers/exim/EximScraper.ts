@@ -41,7 +41,14 @@ export class EximScraper extends BaseScraper {
 
     // Intercept ALL fetch/XHR responses and try to extract offer data from JSON
     const tryIntercept = async (route: Route) => {
-      const response = await route.fetch();
+      let response;
+      try {
+        response = await route.fetch();
+      } catch {
+        // SSL / network error on a 3rd-party domain (e.g. chat.dertouristik.cz) — skip
+        await route.continue().catch(() => undefined);
+        return;
+      }
       try {
         const contentType = response.headers()['content-type'] ?? '';
         if (contentType.includes('json')) {

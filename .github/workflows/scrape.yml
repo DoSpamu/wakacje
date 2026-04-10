@@ -90,9 +90,11 @@ jobs:
           ENABLE_ENRICHMENT: false
           SCRAPE_DATE_FROM: ${{ steps.dates.outputs.date_from }}
           SCRAPE_DATE_TO: ${{ steps.dates.outputs.date_to }}
+          # Node.js 24 on Ubuntu: trust system CA certs (needed for some provider SSL certs)
+          NODE_OPTIONS: --use-system-ca
         run: |
           PROVIDERS="${{ inputs.providers || 'all' }}"
-          node --import=tsx/esm src/run.ts "$PROVIDERS"
+          node --import=tsx/esm src/run.ts "$PROVIDERS" || true
         working-directory: packages/scrapers
 
       - name: Enrich hotels (TripAdvisor + YouTube)

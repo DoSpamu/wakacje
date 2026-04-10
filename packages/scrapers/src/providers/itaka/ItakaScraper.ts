@@ -84,7 +84,14 @@ export class ItakaScraper extends BaseScraper {
 
     // Intercept all JSON responses — Itaka loads offers via XHR after page render
     const tryIntercept = async (route: Route) => {
-      const response = await route.fetch();
+      let response;
+      try {
+        response = await route.fetch();
+      } catch {
+        // SSL / network error on 3rd-party domain — skip gracefully
+        await route.continue().catch(() => undefined);
+        return;
+      }
       try {
         const ct = response.headers()['content-type'] ?? '';
         if (ct.includes('json')) {
