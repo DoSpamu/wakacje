@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import Image from 'next/image';
 import { createServerClient } from '@/lib/supabase';
 import { formatRating, stars, getScoreClass } from '@/lib/scoring';
 
@@ -84,11 +85,13 @@ export default async function HotelPage({ params }: Props) {
               rel="noopener noreferrer"
               className="col-span-2 row-span-2 relative overflow-hidden rounded-l-xl bg-slate-100"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={(photos[0] as Record<string, string>)['url']}
                 alt={hotel.canonical_name}
-                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                fill
+                sizes="(max-width: 768px) 50vw, 40vw"
+                className="object-cover hover:scale-105 transition-transform duration-500"
+                priority
               />
             </a>
             {/* Side photos */}
@@ -102,11 +105,12 @@ export default async function HotelPage({ params }: Props) {
                   rel="noopener noreferrer"
                   className={`relative overflow-hidden bg-slate-100 ${i === 1 ? 'rounded-tr-xl' : ''} ${i === 3 ? 'rounded-br-xl' : ''}`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={photo['url']}
                     alt={`${hotel.canonical_name} zdjęcie ${i + 2}`}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                    fill
+                    sizes="(max-width: 768px) 25vw, 20vw"
+                    className="object-cover hover:scale-105 transition-transform duration-500"
                   />
                 </a>
               );

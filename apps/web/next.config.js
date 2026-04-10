@@ -2,26 +2,33 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@wakacje/shared'],
+
+  // exceljs uses Node.js APIs — keep it server-side only
+  serverExternalPackages: ['exceljs'],
+
   eslint: {
-    // Type-aware ESLint rules require parserOptions.project — skip during build
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // Type errors are caught in dev; don't block production builds
     ignoreBuildErrors: false,
   },
-  experimental: {
-    serverComponentsExternalPackages: ['exceljs'],
+
+  // Allow images from TripAdvisor CDN (used by hotel detail page + offers table thumbnails)
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: 'dynamic-media-cdn.tripadvisor.com' },
+      { protocol: 'https', hostname: 'media-cdn.tripadvisor.com' },
+      { protocol: 'https', hostname: '*.tripadvisor.com' },
+    ],
   },
+
   webpack: (config, { isServer }) => {
-    // Resolve .js imports to .ts files for @wakacje/shared (NodeNext ESM style)
     config.resolve.extensionAlias = {
       '.js': ['.ts', '.tsx', '.js'],
       '.jsx': ['.tsx', '.jsx'],
       '.mjs': ['.mts', '.mjs'],
     };
 
-    // Node.js built-ins used in shared package (loadScoringConfig) — not needed in browser
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
