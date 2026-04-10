@@ -1,5 +1,5 @@
-import { chromium } from 'playwright';
-import type { Page, Route } from 'playwright';
+import { chromium } from 'patchright';
+import type { Page, Route } from 'patchright';
 import type { RawOffer, SearchFilter } from '@wakacje/shared';
 import { BaseScraper } from '../../base/BaseScraper.js';
 import { logger } from '../../base/logger.js';
@@ -63,8 +63,6 @@ export class CoralScraper extends BaseScraper {
     );
 
     logger.info('Browser initialized (stealth mode)', { browser: 'chromium' }, 'coral');
-
-    if (!this.context) return;
 
     // Intercept Coral Travel API responses
     await this.context.route('**/api/**', async (route: Route) => {

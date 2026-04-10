@@ -1,4 +1,4 @@
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { RawOffer, SearchFilter } from '@wakacje/shared';
 import { BaseScraper } from '../../base/BaseScraper.js';
 import { logger } from '../../base/logger.js';

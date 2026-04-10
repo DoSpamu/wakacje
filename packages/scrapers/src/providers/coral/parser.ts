@@ -1,4 +1,4 @@
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { RawOffer } from '@wakacje/shared';
 import { logger } from '../../base/logger.js';
 import { CORAL_SELECTORS } from './config.js';

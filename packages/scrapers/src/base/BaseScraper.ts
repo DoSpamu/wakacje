@@ -1,4 +1,4 @@
-import { chromium, firefox, webkit, type Browser, type BrowserContext, type Page } from 'playwright';
+import { chromium, firefox, webkit, type Browser, type BrowserContext, type Page } from 'patchright';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import type { RawOffer, ProviderCode, SearchFilter } from '@wakacje/shared';

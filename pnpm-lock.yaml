@@ -120,9 +120,9 @@ importers:
       p-retry:
         specifier: ^6.2.0
         version: 6.2.1
-      playwright:
-        specifier: ^1.44.0
-        version: 1.59.1
+      patchright:
+        specifier: ^1.59.4
+        version: 1.59.4
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -1902,6 +1902,16 @@ packages:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
     engines: {node: '>=6'}
 
+  patchright-core@1.59.4:
+    resolution: {integrity: sha512-7/vyX0XK0cpGKlcnUD+Rhjv5o9rrmZQl4v/NI+EUBed+VaU5EORpkOF0Gdi+fP698fLhY0tXwacKBUqKE38jQA==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  patchright@1.59.4:
+    resolution: {integrity: sha512-RDZ40tBZHZtTAMoUoct/IpMA1wrozPZGU2RFk8NIDEndOEBbLxS0dH2fRLiwsNrgXgjZGA/3krrTlzK+uFGgoQ==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   path-exists@4.0.0:
     resolution: {integrity: sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w==}
     engines: {node: '>=8'}
@@ -1943,16 +1953,6 @@ packages:
   pirates@4.0.7:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
-
-  playwright-core@1.59.1:
-    resolution: {integrity: sha512-HBV/RJg81z5BiiZ9yPzIiClYV/QMsDCKUyogwH9p3MCP6IYjUFu/MActgYAvK0oWyV9NlwM3GLBjADyWgydVyg==}
-    engines: {node: '>=18'}
-    hasBin: true
-
-  playwright@1.59.1:
-    resolution: {integrity: sha512-C8oWjPR3F81yljW9o5OxcWzfh6avkVwDD2VYdwIGqTkl+OGFISgypqzfu7dOe4QNLL2aqcWBmI3PMtLIK233lw==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -4417,6 +4417,14 @@ snapshots:
     dependencies:
       callsites: 3.1.0
 
+  patchright-core@1.59.4: {}
+
+  patchright@1.59.4:
+    dependencies:
+      patchright-core: 1.59.4
+    optionalDependencies:
+      fsevents: 2.3.2
+
   path-exists@4.0.0: {}
 
   path-is-absolute@1.0.1: {}
@@ -4441,14 +4449,6 @@ snapshots:
   pify@2.3.0: {}
 
   pirates@4.0.7: {}
-
-  playwright-core@1.59.1: {}
-
-  playwright@1.59.1:
-    dependencies:
-      playwright-core: 1.59.1
-    optionalDependencies:
-      fsevents: 2.3.2
 
   possible-typed-array-names@1.1.0: {}
 

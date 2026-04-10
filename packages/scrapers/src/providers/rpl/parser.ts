@@ -6,7 +6,7 @@
  * Output: Partial<RawOffer> or null if parsing fails
  */
 
-import type { Page, Locator } from 'playwright';
+import type { Page, Locator } from 'patchright';
 import type { RawOffer } from '@wakacje/shared';
 import { logger } from '../../base/logger.js';
 import { RPL_SELECTORS } from './config.js';

@@ -14,7 +14,7 @@
  * - Does NOT bypass CAPTCHA or authentication
  */
 
-import { chromium, type Browser, type BrowserContext } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'patchright';
 import type { HotelReviewSummary } from '@wakacje/shared';
 import { logger } from '../base/logger.js';
 import { jitteredDelay, withRetry } from '../base/retry.js';
@@ -168,7 +168,7 @@ export class TripAdvisorEnricher {
   }
 
   private async extractRatingData(
-    page: import('playwright').Page,
+    page: Page,
     _url: string,
   ): Promise<Omit<HotelReviewSummary, 'id' | 'hotelId' | 'createdAt'> | null> {
     try {
@@ -240,7 +240,7 @@ export class TripAdvisorEnricher {
   }
 
   private async extractSentimentTags(
-    page: import('playwright').Page,
+    page: Page,
     scores: {
       foodScore: number | null;
       roomsScore: number | null;
@@ -311,7 +311,7 @@ export class TripAdvisorEnricher {
     return tags;
   }
 
-  private async extractPhotos(page: import('playwright').Page): Promise<string[]> {
+  private async extractPhotos(page: Page): Promise<string[]> {
     const urls: string[] = [];
 
     try {
