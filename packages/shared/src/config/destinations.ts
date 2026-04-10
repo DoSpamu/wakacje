@@ -68,7 +68,8 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'TR',
     providers: {
       rpl: { kraj: 'turcja', displayName: 'Turcja' },
-      exim: { ids: [1825, 1826, 1862, 1863, 1864, 1867], displayName: 'Turcja' },
+      // Exim IDs discovered 2026-04-10 from /kierunki/turcja (Antalya/Turkish Riviera)
+      exim: { ids: [63288, 63448, 64157], displayName: 'Turcja' },
       coral: { slugs: ['turcja', 'turkey'], displayName: 'Turcja' },
       itaka: { slug: 'turcja', displayName: 'Turcja' },
       grecos: { slug: 'turcja', displayName: 'Turcja' },
@@ -81,7 +82,8 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'EG',
     providers: {
       rpl: { kraj: 'egipt', displayName: 'Egipt' },
-      exim: { ids: [1901, 1902, 1903], displayName: 'Egipt' },
+      // Exim IDs discovered 2026-04-10 from /all-inclusive page
+      exim: { ids: [64419, 64420, 64425], displayName: 'Egipt' },
       coral: { slugs: ['egipt', 'egypt'], displayName: 'Egipt' },
       itaka: { slug: 'egipt', displayName: 'Egipt' },
       grecos: { slug: 'egipt', displayName: 'Egipt' },
@@ -94,7 +96,8 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'GR',
     providers: {
       rpl: { kraj: 'grecja', displayName: 'Grecja' },
-      exim: { ids: [1801, 1802, 1803, 1804, 1805, 1806], displayName: 'Grecja' },
+      // Exim IDs discovered 2026-04-10 from /all-inclusive page
+      exim: { ids: [63220, 63281, 63316, 63324, 63402], displayName: 'Grecja' },
       coral: { slugs: ['grecja', 'greece'], displayName: 'Grecja' },
       itaka: { slug: 'grecja', displayName: 'Grecja' },
       grecos: { slug: 'grecja', displayName: 'Grecja' },
@@ -107,7 +110,8 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'ES',
     providers: {
       rpl: { kraj: 'hiszpania', displayName: 'Hiszpania' },
-      exim: { ids: [1701, 1702, 1703, 1704], displayName: 'Hiszpania' },
+      // Exim IDs discovered 2026-04-10 from /all-inclusive page (incl. Canary Islands)
+      exim: { ids: [63213, 63241, 63242, 63243, 63245, 63284, 63350, 74459, 74460, 74465], displayName: 'Hiszpania' },
       coral: { slugs: ['hiszpania', 'spain'], displayName: 'Hiszpania' },
       itaka: { slug: 'hiszpania', displayName: 'Hiszpania' },
       grecos: { slug: 'hiszpania', displayName: 'Hiszpania' },
@@ -120,7 +124,8 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'CY',
     providers: {
       rpl: { kraj: 'cypr', displayName: 'Cypr' },
-      exim: { ids: [1601, 1602], displayName: 'Cypr' },
+      // Exim IDs discovered 2026-04-10 from /all-inclusive page
+      exim: { ids: [63540, 63541, 63542], displayName: 'Cypr' },
       coral: { slugs: ['cypr', 'cyprus'], displayName: 'Cypr' },
       itaka: { slug: 'cypr', displayName: 'Cypr' },
       grecos: { slug: 'cypr', displayName: 'Cypr' },

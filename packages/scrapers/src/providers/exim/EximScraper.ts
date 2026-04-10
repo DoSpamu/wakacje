@@ -67,12 +67,9 @@ export class EximScraper extends BaseScraper {
 
     // Cast the handler to satisfy Playwright's overloaded types
     const handler = tryIntercept as Parameters<typeof this.context.route>[1];
-    await this.context.route(EXIM_CONFIG.apiPattern, handler);
-    await this.context.route('**/search**', handler);
-    await this.context.route('**/oferty**', handler);
-    await this.context.route('**/pakiety**', handler);
-    await this.context.route('**/wyniki**', handler);
-    await this.context.route('**/*.json*', handler);
+    // Intercept all requests to exim.pl — BaseScraper already aborts images/fonts,
+    // handler checks content-type so non-JSON passes through with minimal overhead
+    await this.context.route('https://www.exim.pl/**', handler);
   }
 
   protected async waitForResults(page: Page): Promise<void> {

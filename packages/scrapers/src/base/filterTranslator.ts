@@ -121,14 +121,17 @@ export function translateToRpl(filter: SearchFilter): RplSearchParams[] {
 //  Exim Tours
 // ─────────────────────────────────────────────
 
-/** Exim Tours board type mapping */
-const EXIM_BOARD_MAP: Record<BoardType, string | null> = {
-  'all-inclusive': 'AI',
-  'ultra-all-inclusive': 'UAI',
-  'half-board': 'HB',
-  'full-board': 'FB',
-  'bed-and-breakfast': 'BB',
-  'room-only': 'RO',
+/**
+ * Exim meal type codes (m= parameter).
+ * Discovered 2026-04-10 from /all-inclusive page search URLs.
+ */
+const EXIM_MEAL_MAP: Record<BoardType, string | null> = {
+  'all-inclusive': '5',
+  'ultra-all-inclusive': '6',   // best guess; verify if needed
+  'half-board': '3',            // best guess
+  'full-board': '4',            // best guess
+  'bed-and-breakfast': '2',     // best guess
+  'room-only': '1',             // best guess
   'unknown': null,
 };
 
@@ -154,8 +157,13 @@ export function translateToExim(filter: SearchFilter): EximSearchParams[] {
 
   const params = new URLSearchParams();
 
-  // Adults count
-  params.set('ac1', filter.adults.toString());
+  // Fixed params required by Exim's search engine (discovered 2026-04-10)
+  params.set('ds', '0');
+  params.set('tt', '1');           // transport type: 1 = air
+  params.set('er', '0');
+
+  // Destinations — pipe-separated IDs (d= param, not the old to=)
+  params.set('d', destinationIds.join('|'));
 
   // Departure date from
   params.set('dd', filter.departureDateFrom);
@@ -170,29 +178,29 @@ export function translateToExim(filter: SearchFilter): EximSearchParams[] {
   }
   params.set('nn', nightsList.join('|'));
 
-  // Destinations — pipe-separated IDs
-  params.set('to', destinationIds.join('|'));
-
-  // Transport type: 1 = air
-  params.set('tt', '1');
-
-  // Departure airport (Exim uses 'df' param)
-  if (filter.departureAirports.length > 0) {
-    params.set('df', filter.departureAirports.join('|'));
+  // Meal/board type (m= numeric code)
+  const mealCodes = filter.boardTypes
+    .map((b) => EXIM_MEAL_MAP[b])
+    .filter((m): m is string => m !== null);
+  if (mealCodes.length > 0) {
+    params.set('m', mealCodes.join('|'));
   }
 
-  // Board type
-  const eximBoards = filter.boardTypes
-    .map((b) => EXIM_BOARD_MAP[b])
-    .filter((b): b is string => b !== null);
+  // Adults count
+  params.set('ac1', filter.adults.toString());
 
-  if (eximBoards.length > 0) {
-    params.set('bt', eximBoards.join('|'));
-  }
+  // Children / infants (fixed to 0)
+  params.set('kc1', '0');
+  params.set('ic1', '0');
 
-  // Hotel category (stars) — Exim uses numeric: 4, 5
+  // Hotel category (stars) — still seems to use numeric: 4, 5
   if (filter.hotelStars.length > 0) {
     params.set('cat', filter.hotelStars.join('|'));
+  }
+
+  // Departure airports — try df= (may or may not be respected by new API)
+  if (filter.departureAirports.length > 0) {
+    params.set('df', filter.departureAirports.join('|'));
   }
 
   results.push({ baseUrl, params });
