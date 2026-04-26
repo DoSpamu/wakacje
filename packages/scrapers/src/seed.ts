@@ -22,7 +22,6 @@ const supabase = createClient(
 const PROVIDERS = [
   { code: 'rpl', name: 'R.pl', base_url: 'https://r.pl', is_active: true },
   { code: 'exim', name: 'Exim Tours', base_url: 'https://www.exim.pl', is_active: true },
-  { code: 'coral', name: 'Coral Travel Polska', base_url: 'https://www.coraltravel.pl', is_active: true },
   { code: 'itaka', name: 'Itaka', base_url: 'https://www.itaka.pl', is_active: true },
   { code: 'grecos', name: 'Grecos Holiday', base_url: 'https://www.grecos.pl', is_active: true },
   { code: 'tui', name: 'TUI Poland', base_url: 'https://www.tui.pl', is_active: true },
@@ -152,7 +151,6 @@ async function seed() {
     { hotel: 'Delphin Imperial', airport: 'KRK', depDate: '2026-05-25', nights: 10, price: 7600, pricePerPerson: 3800, provider: 'tui', dest: 'turkey', url: 'https://www.tui.pl/oferta/delphin-imperial' },
     { hotel: 'RIXOS Premium Seagate', airport: 'KTW', depDate: '2026-05-20', nights: 7, price: 9800, pricePerPerson: 4900, provider: 'rpl', dest: 'egypt', url: 'https://r.pl/oferta/rixos-premium-seagate' },
     { hotel: 'Steigenberger Aqua Magic', airport: 'KTW', depDate: '2026-06-10', nights: 7, price: 5600, pricePerPerson: 2800, provider: 'exim', dest: 'egypt', url: 'https://www.exim.pl/oferta/steigenberger' },
-    { hotel: 'Steigenberger Aqua Magic', airport: 'KRK', depDate: '2026-06-10', nights: 7, price: 5800, pricePerPerson: 2900, provider: 'coral', dest: 'egypt', url: 'https://www.coraltravel.pl/oferta/steigenberger' },
     { hotel: 'Creta Maris Beach Resort', airport: 'KTW', depDate: '2026-06-01', nights: 7, price: 6200, pricePerPerson: 3100, provider: 'grecos', dest: 'greece', url: 'https://www.grecos.pl/oferta/creta-maris' },
     { hotel: 'Riu Palace Tenerife', airport: 'KTW', depDate: '2026-05-15', nights: 10, price: 7800, pricePerPerson: 3900, provider: 'itaka', dest: 'canary-islands', url: 'https://www.itaka.pl/oferta/riu-palace-tenerife' },
   ];
