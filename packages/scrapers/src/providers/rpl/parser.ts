@@ -100,20 +100,12 @@ export function parseRplDate(raw: string): string {
 }
 
 /**
- * Parse all offer cards from the current page.
+ * Parse all offer cards from the current page (DOM fallback).
  * Returns array of RawOffer objects.
  */
 export async function parseRplPage(page: Page, sourceUrl: string): Promise<RawOffer[]> {
   const offers: RawOffer[] = [];
 
-  // Try to get offer data from structured JSON-LD if available
-  const jsonLdOffers = await parseJsonLd(page);
-  if (jsonLdOffers.length > 0) {
-    logger.debug(`Parsed ${jsonLdOffers.length} offers from JSON-LD`, undefined, 'rpl');
-    return jsonLdOffers;
-  }
-
-  // Fall back to DOM parsing
   const cards = page.locator(RPL_SELECTORS.offerCard);
   const count = await cards.count();
 
@@ -210,54 +202,16 @@ async function parseRplCard(card: Locator, sourceUrl: string): Promise<RawOffer 
   }
 }
 
-/** Try to extract offers from structured data (JSON-LD) — faster and more reliable */
-async function parseJsonLd(page: Page): Promise<RawOffer[]> {
-  try {
-    await page.evaluate(() => {
-      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-      const results: unknown[] = [];
-      scripts.forEach((s) => {
-        try {
-          results.push(JSON.parse(s.textContent ?? ''));
-        } catch {
-          // ignore
-        }
-      });
-      return results;
-    });
-
-    // Also check for __NEXT_DATA__ or window.__INITIAL_STATE__
-    const nextData = await page.evaluate(() => {
-      const el = document.getElementById('__NEXT_DATA__');
-      if (el?.textContent) {
-        try {
-          return JSON.parse(el.textContent);
-        } catch {
-          return null;
-        }
-      }
-      return null;
-    });
-
-    if (nextData) {
-      return extractFromNextData(nextData);
-    }
-
-    return [];
-  } catch {
-    return [];
-  }
-}
-
+/** Extract offers from r.pl __NEXT_DATA__ JSON — pure function, no browser dependency */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractFromNextData(data: any): RawOffer[] {
+export function parseRplNextData(data: unknown): RawOffer[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = data as any;
   // Try to find offers in common Next.js state shapes
   const offers: RawOffer[] = [];
 
   try {
-    // Attempt to find a list of offers in the state tree
-    // This is heuristic — adjust based on actual r.pl response structure
-    const props = data?.props?.pageProps;
+    const props = d?.props?.pageProps;
     const offerList = props?.offers ?? props?.results ?? props?.data?.offers ?? [];
 
     if (!Array.isArray(offerList)) return offers;

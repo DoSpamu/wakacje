@@ -4,7 +4,7 @@ import { BaseScraper } from '../../base/BaseScraper.js';
 import { logger } from '../../base/logger.js';
 import { jitteredDelay } from '../../base/retry.js';
 import { translateToRpl } from '../../base/filterTranslator.js';
-import { parseRplPage } from './parser.js';
+import { parseRplPage, parseRplNextData } from './parser.js';
 import { RPL_SELECTORS, RPL_CONFIG } from './config.js';
 
 export class RplScraper extends BaseScraper {
@@ -19,6 +19,16 @@ export class RplScraper extends BaseScraper {
   }
 
   protected async parsePage(page: Page, url: string): Promise<RawOffer[]> {
+    const nextDataText: string | null = await page.evaluate(() => {
+      const el = document.getElementById('__NEXT_DATA__');
+      return el?.textContent ?? null;
+    });
+    if (nextDataText) {
+      try {
+        const offers = parseRplNextData(JSON.parse(nextDataText));
+        if (offers.length > 0) return offers;
+      } catch { /* fall through to DOM */ }
+    }
     return parseRplPage(page, url);
   }
 
