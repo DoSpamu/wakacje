@@ -35,3 +35,7 @@ Thumbs.db
 *.tsbuildinfo
 
 .vercel
+
+# Scraper spy/debug tools (local only)
+packages/scrapers/src/spy-*.ts
+packages/scrapers/spy-*.json

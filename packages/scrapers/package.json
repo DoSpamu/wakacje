@@ -7,7 +7,6 @@
     "scrape": "node --env-file=../../.env --import=tsx/esm src/run.ts all",
     "scrape:rpl": "node --env-file=../../.env --import=tsx/esm src/run.ts rpl",
     "scrape:exim": "node --env-file=../../.env --import=tsx/esm src/run.ts exim",
-    "scrape:coral": "node --env-file=../../.env --import=tsx/esm src/run.ts coral",
     "scrape:itaka": "node --env-file=../../.env --import=tsx/esm src/run.ts itaka",
     "scrape:grecos": "node --env-file=../../.env --import=tsx/esm src/run.ts grecos",
     "scrape:tui": "node --env-file=../../.env --import=tsx/esm src/run.ts tui",

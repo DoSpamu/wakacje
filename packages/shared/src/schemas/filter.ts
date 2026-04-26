@@ -53,7 +53,7 @@ export const SearchFilterSchema = z.object({
     .enum(['price', 'compositeScore', 'hotelStars', 'foodScore', 'overallRating', 'departureDate', 'nights'])
     .default('compositeScore'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  providers: z.array(z.enum(['rpl', 'exim', 'coral', 'itaka', 'grecos', 'tui'])).optional(),
+  providers: z.array(z.enum(['rpl', 'exim', 'itaka', 'grecos', 'tui'])).optional(),
 });
 
 export type SearchFilterInput = z.input<typeof SearchFilterSchema>;

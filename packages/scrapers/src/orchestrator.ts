@@ -19,7 +19,6 @@ import { DEFAULT_FILTER } from '@wakacje/shared';
 
 import { RplScraper } from './providers/rpl/RplScraper.js';
 import { EximScraper } from './providers/exim/EximScraper.js';
-import { CoralScraper } from './providers/coral/CoralScraper.js';
 import { ItakaScraper } from './providers/itaka/ItakaScraper.js';
 import { GrecosScraper } from './providers/grecos/GrecosScraper.js';
 import { TuiScraper } from './providers/tui/TuiScraper.js';
@@ -55,7 +54,6 @@ import type { ScrapeContext } from './base/types.js';
 const PROVIDER_SCRAPERS = {
   rpl: RplScraper,
   exim: EximScraper,
-  coral: CoralScraper,
   itaka: ItakaScraper,
   grecos: GrecosScraper,
   tui: TuiScraper,
