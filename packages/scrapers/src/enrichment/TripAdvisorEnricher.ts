@@ -1,17 +1,14 @@
 /**
- * TripAdvisor enricher.
+ * TripAdvisor enricher — extracts hotel ratings and review snippets.
  *
- * Strategy:
- * 1. Search TripAdvisor for hotel name + location
- * 2. Navigate to hotel page
- * 3. Extract rating, review count, category scores
- * 4. Generate sentiment summary tags
+ * Strategy (in order of reliability):
+ *   1. JSON-LD structured data in <head> — stable across TA redesigns
+ *   2. page.evaluate() reading TA DOM state
+ *   3. Flexible aria-label / data-automation selectors as final fallback
  *
- * NOTE: TripAdvisor actively blocks scraping. This implementation:
- * - Uses realistic browser fingerprinting
- * - Respects rate limits (≥3s between requests)
- * - Only collects publicly visible aggregate data
- * - Does NOT bypass CAPTCHA or authentication
+ * NOTE: TripAdvisor blocks automated traffic. This implementation uses
+ * realistic browser fingerprinting and respects rate limits.
+ * It only collects publicly visible aggregate data, no auth bypass.
  */
 
 import { chromium, type Browser, type BrowserContext, type Page } from 'patchright';
@@ -27,21 +24,8 @@ export interface EnrichmentResult {
   photos: string[];
 }
 
-const TA_SELECTORS = {
-  searchInput: 'input[placeholder*="Search"], input[name="q"], #typeahead_searchbox',
-  searchResult: '[class*="SearchResultCard"], [data-automation="SearchResultCard"]',
-  resultTitle: 'a[href*="/Hotel_Review"], [class*="resultTitle"]',
-  overallRating: '[class*="ui_bubble_rating"], [data-automation="bubbleRating"]',
-  reviewCount: '[class*="reviewCount"], [class*="review_count"]',
-  ratingBubble: 'span[class*="bubble_"]',
-  categoryScores: '[class*="sectionTitle"] + [class*="score"], [class*="categoryRating"]',
-  foodScore: 'div:has-text("Wyżywienie") .ui_bubble_rating, div:has-text("Food") .ui_bubble_rating',
-  roomsScore: 'div:has-text("Pokoje") .ui_bubble_rating, div:has-text("Rooms") .ui_bubble_rating',
-  cleanlinessScore: 'div:has-text("Czystość") .ui_bubble_rating, div:has-text("Cleanliness") .ui_bubble_rating',
-  serviceScore: 'div:has-text("Obsługa") .ui_bubble_rating, div:has-text("Service") .ui_bubble_rating',
-  locationScore: 'div:has-text("Lokalizacja") .ui_bubble_rating, div:has-text("Location") .ui_bubble_rating',
-  reviewText: '[class*="review_container"] [class*="reviewText"], [data-automation="reviewText"]',
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyObj = Record<string, any>;
 
 export class TripAdvisorEnricher {
   private browser: Browser | null = null;
@@ -50,9 +34,9 @@ export class TripAdvisorEnricher {
 
   constructor() {
     this.rateLimiter = new RateLimiter({
-      requestsPerWindow: 12,
+      requestsPerWindow: 10,
       windowMs: 60_000,
-      minDelayMs: parseInt(process.env['ENRICHMENT_DELAY_MS'] ?? '1500', 10),
+      minDelayMs: parseInt(process.env['ENRICHMENT_DELAY_MS'] ?? '2000', 10),
     });
   }
 
@@ -66,9 +50,11 @@ export class TripAdvisorEnricher {
       viewport: { width: 1440, height: 900 },
       locale: 'pl-PL',
       timezoneId: 'Europe/Warsaw',
+      extraHTTPHeaders: {
+        'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+      },
     });
 
-    // Block images and ads to speed up loading
     await this.context.route(
       '**/*.{png,jpg,jpeg,gif,webp,ico,svg,woff,woff2}',
       (route) => route.abort(),
@@ -120,44 +106,33 @@ export class TripAdvisorEnricher {
     const page = await this.context.newPage();
 
     try {
-      // Step 1: Search TripAdvisor
-      const searchQuery = encodeURIComponent(`${hotelName} ${location} hotel`);
-      const searchUrl = `https://www.tripadvisor.com/Search?q=${searchQuery}`;
+      const q = encodeURIComponent(`${hotelName} ${location} hotel`);
+      await page.goto(`https://www.tripadvisor.com/Search?q=${q}&lang=pl`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      });
+      await jitteredDelay(2500, 1000);
+      await this.dismissCookies(page);
 
-      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await jitteredDelay(2000, 1000);
-
-      // Accept cookies if asked
-      try {
-        const acceptBtn = page.locator('button:has-text("Accept"), button:has-text("OK")').first();
-        if (await acceptBtn.isVisible({ timeout: 3000 })) {
-          await acceptBtn.click();
-          await jitteredDelay(1000, 500);
-        }
-      } catch {
-        // no cookie dialog
-      }
-
-      // Step 2: Find first hotel result
-      const firstResult = page.locator(TA_SELECTORS.resultTitle).first();
-      const hotelUrl = await firstResult.getAttribute('href', { timeout: 10000 });
-
+      const hotelUrl = await this.findHotelUrl(page, hotelName);
       if (!hotelUrl) {
-        logger.warn(`No TripAdvisor result for "${hotelName}"`, undefined);
+        logger.warn(`No TripAdvisor result for "${hotelName}"`);
         return null;
       }
 
       const fullUrl = hotelUrl.startsWith('http')
         ? hotelUrl
         : `https://www.tripadvisor.com${hotelUrl}`;
+      const plUrl = fullUrl.includes('?')
+        ? `${fullUrl}&lang=pl`
+        : `${fullUrl}?lang=pl`;
 
-      // Step 3: Navigate to hotel page
       await this.rateLimiter.acquire();
-      await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await jitteredDelay(2000, 1000);
+      await page.goto(plUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await jitteredDelay(2500, 1000);
+      await this.dismissCookies(page);
 
-      // Step 4: Extract rating data and photos
-      const ratingData = await this.extractRatingData(page, fullUrl);
+      const ratingData = await this.extractRatingData(page, plUrl);
       if (!ratingData) return null;
 
       const photos = await this.extractPhotos(page);
@@ -167,72 +142,150 @@ export class TripAdvisorEnricher {
     }
   }
 
+  private async dismissCookies(page: Page): Promise<void> {
+    const selectors = [
+      '#onetrust-accept-btn-handler',
+      'button[id*="accept"]',
+      'button:has-text("Accept all")',
+      'button:has-text("Akceptuj")',
+      'button:has-text("OK")',
+    ];
+    for (const sel of selectors) {
+      try {
+        const btn = page.locator(sel).first();
+        if (await btn.isVisible({ timeout: 1500 })) {
+          await btn.click();
+          await jitteredDelay(600, 300);
+          return;
+        }
+      } catch { /* continue */ }
+    }
+  }
+
+  private async findHotelUrl(page: Page, _hotelName: string): Promise<string | null> {
+    const selectors = [
+      'a[href*="/Hotel_Review"]',
+      '[data-automation="SearchResultCard"] a[href*="Hotel"]',
+      '[data-searchlisting] a[href*="Hotel"]',
+    ];
+
+    for (const sel of selectors) {
+      try {
+        const href = await page.locator(sel).first().getAttribute('href', { timeout: 3000 });
+        if (href) return href;
+      } catch { /* try next */ }
+    }
+
+    return page.evaluate((): string | null => {
+      const link = document.querySelector<HTMLAnchorElement>('a[href*="/Hotel_Review"]');
+      return link?.href ?? null;
+    });
+  }
+
   private async extractRatingData(
     page: Page,
-    _url: string,
+    url: string,
   ): Promise<Omit<HotelReviewSummary, 'id' | 'hotelId' | 'createdAt'> | null> {
     try {
-      // Extract overall rating
-      const ratingText = await page
-        .locator('[class*="ui_bubble_rating"], [data-automation="bubbleRating"]')
-        .first()
-        .getAttribute('class', { timeout: 5000 });
-
-      // TripAdvisor ratings are encoded in class names like "bubble_50" = 5.0
-      const ratingMatch = ratingText ? /bubble_(\d+)/.exec(ratingText) : null;
-      const overallRating = ratingMatch ? parseInt(ratingMatch[1]!, 10) / 10 : null;
-
-      // Extract review count
-      const reviewCountText = await page
-        .locator('[class*="reviewCount"], [class*="review_count"], [data-automation="reviewCount"]')
-        .first()
-        .innerText({ timeout: 5000 })
-        .catch(() => '');
-
-      const reviewCount = reviewCountText
-        ? parseInt(reviewCountText.replace(/[^\d]/g, ''), 10) || null
-        : null;
-
-      // Extract category scores
-      const categoryScore = async (selector: string): Promise<number | null> => {
-        try {
-          const el = page.locator(selector).first();
-          const cls = await el.getAttribute('class', { timeout: 3000 });
-          const match = cls ? /bubble_(\d+)/.exec(cls) : null;
-          return match ? parseInt(match[1]!, 10) / 10 : null;
-        } catch {
-          return null;
+      // Strategy 1: JSON-LD (most stable — doesn't break with CSS redesigns)
+      const jsonLd = await page.evaluate((): AnyObj | null => {
+        for (const el of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
+          try {
+            const d = JSON.parse(el.textContent ?? '');
+            if (d.aggregateRating || d['@type'] === 'Hotel' || d['@type'] === 'LodgingBusiness') {
+              return d;
+            }
+          } catch { /* skip */ }
         }
-      };
-
-      const foodScore = await categoryScore(TA_SELECTORS.foodScore);
-      const roomsScore = await categoryScore(TA_SELECTORS.roomsScore);
-      const cleanlinessScore = await categoryScore(TA_SELECTORS.cleanlinessScore);
-      const serviceScore = await categoryScore(TA_SELECTORS.serviceScore);
-
-      // Generate sentiment tags from visible review snippets
-      const sentimentTags = await this.extractSentimentTags(page, {
-        foodScore,
-        roomsScore,
-        cleanlinessScore,
-        serviceScore,
-        overallRating,
+        return null;
       });
 
-      // Extract up to 5 review snippets (actual review text)
+      let overallRating: number | null = null;
+      let reviewCount: number | null = null;
+
+      if (jsonLd?.aggregateRating) {
+        overallRating = parseFloat(String(jsonLd.aggregateRating.ratingValue)) || null;
+        reviewCount = parseInt(String(jsonLd.aggregateRating.reviewCount), 10) || null;
+        logger.debug(`JSON-LD: rating=${overallRating}, reviews=${reviewCount} for ${url}`);
+      }
+
+      // Strategy 2: DOM evaluation for rating number and review count
+      if (!overallRating) {
+        const domData = await page.evaluate((): { rating: number | null; count: number | null } => {
+          const ratingEl = document.querySelector<HTMLElement>(
+            '[data-automation="ratingNumber"], [class*="biGQs"][class*="P"]',
+          );
+          const ratingText = ratingEl?.textContent?.replace(',', '.').trim() ?? '';
+          const rating = parseFloat(ratingText) || null;
+
+          let count: number | null = null;
+          for (const el of Array.from(document.querySelectorAll<HTMLElement>('[data-automation="reviewCount"]'))) {
+            const n = parseInt((el.textContent ?? '').replace(/[^\d]/g, ''), 10);
+            if (n > 10) { count = n; break; }
+          }
+
+          return { rating: rating && rating <= 5 ? rating : null, count };
+        });
+
+        overallRating = domData.rating;
+        reviewCount = domData.count;
+      }
+
+      // Strategy 3: Category scores via aria-labels ("Wyżywienie 4,5 z 5")
+      const categoryScores = await page.evaluate((): AnyObj => {
+        const scores: AnyObj = {};
+        const labelMap: Record<string, string> = {
+          'wyżywieni': 'food', 'jedzeni': 'food', 'food': 'food', 'cuisine': 'food',
+          'pokój': 'rooms', 'pokoje': 'rooms', 'rooms': 'rooms', 'room': 'rooms',
+          'czystość': 'cleanliness', 'cleanliness': 'cleanliness',
+          'obsługa': 'service', 'service': 'service', 'staff': 'service',
+          'plaż': 'beach', 'beach': 'beach',
+        };
+
+        Array.from(document.querySelectorAll<HTMLElement>('[aria-label]')).forEach((el) => {
+          const label = (el.getAttribute('aria-label') ?? '').toLowerCase();
+          const m = /([a-ząćęłńóśźżA-ZĄĆĘŁŃÓŚŹŻ\s]+)\s+([\d,\.]+)\s*(z|of|\/)\s*5/i.exec(label);
+          if (!m) return;
+          const category = m[1].trim().toLowerCase();
+          const score = parseFloat(m[2].replace(',', '.'));
+          if (!score || score > 5) return;
+
+          for (const [key, mapped] of Object.entries(labelMap)) {
+            if (category.includes(key) && !scores[mapped]) {
+              scores[mapped] = score;
+            }
+          }
+        });
+
+        return scores;
+      });
+
       const reviewSnippets = await this.extractReviewSnippets(page);
+
+      const sentimentTags = this.buildSentimentTags({
+        overallRating,
+        foodScore: categoryScores['food'] ?? null,
+        roomsScore: categoryScores['rooms'] ?? null,
+        cleanlinessScore: categoryScores['cleanliness'] ?? null,
+        serviceScore: categoryScores['service'] ?? null,
+      });
+
+      if (!overallRating && reviewSnippets.length === 0) {
+        logger.warn(`Could not extract any data from TripAdvisor for ${url}`);
+        return null;
+      }
 
       return {
         source: 'tripadvisor',
         overallRating,
         reviewCount,
-        foodScore,
-        foodSummary: this.buildScoreSummary('jedzenie', foodScore),
-        roomsScore,
-        roomsSummary: this.buildScoreSummary('pokoje', roomsScore),
-        cleanlinessScore,
-        serviceScore,
-        beachScore: null,
+        foodScore: categoryScores['food'] ?? null,
+        foodSummary: this.buildScoreSummary('jedzenie', categoryScores['food'] ?? null),
+        roomsScore: categoryScores['rooms'] ?? null,
+        roomsSummary: this.buildScoreSummary('pokoje', categoryScores['rooms'] ?? null),
+        cleanlinessScore: categoryScores['cleanliness'] ?? null,
+        serviceScore: categoryScores['service'] ?? null,
+        beachScore: categoryScores['beach'] ?? null,
         sentimentTags,
         reviewSnippets,
         scrapedAt: new Date().toISOString(),
@@ -246,80 +299,107 @@ export class TripAdvisorEnricher {
   private async extractReviewSnippets(
     page: Page,
   ): Promise<Array<{ text: string; rating: number | null }>> {
-    const snippets: Array<{ text: string; rating: number | null }> = [];
-    try {
-      // TripAdvisor review card selectors — try multiple patterns
-      const reviewCardSel = [
+    return page.evaluate((): Array<{ text: string; rating: number | null }> => {
+      const results: Array<{ text: string; rating: number | null }> = [];
+
+      const cardSelectors = [
         '[data-automation="reviewCard"]',
-        '[class*="review_container"]',
         '[class*="ReviewCard"]',
-      ].join(', ');
+        '[class*="review-container"]',
+        '[class*="listItem"]',
+      ];
 
-      const cards = page.locator(reviewCardSel);
-      const count = Math.min(await cards.count(), 5);
+      let cards: Element[] = [];
+      for (const sel of cardSelectors) {
+        cards = Array.from(document.querySelectorAll(sel)).slice(0, 6);
+        if (cards.length > 0) break;
+      }
 
-      for (let i = 0; i < count; i++) {
-        const card = cards.nth(i);
+      for (const card of cards) {
+        const textEl =
+          card.querySelector('[data-automation="reviewText"]') ??
+          card.querySelector('[class*="reviewText"]') ??
+          card.querySelector('[class*="partial_entry"]') ??
+          Array.from(card.querySelectorAll('p, span')).find(
+            (el) => (el.textContent?.length ?? 0) > 80,
+          );
 
-        // Extract review text
-        const textEl = card
-          .locator('[data-automation="reviewText"], [class*="reviewText"], [class*="review-text"]')
-          .first();
-        let text = '';
-        try {
-          text = (await textEl.innerText({ timeout: 2000 })).trim();
-        } catch {
-          // fallback: whole card text, first 300 chars
-          try {
-            text = (await card.innerText({ timeout: 2000 })).trim().slice(0, 300);
-          } catch { /* skip */ }
+        const text = textEl?.textContent?.trim().slice(0, 500) ?? '';
+        if (text.length < 30) continue;
+
+        let rating: number | null = null;
+        const ratingEl = card.querySelector<HTMLElement>(
+          '[aria-label*="z 5"], [aria-label*="of 5"], [class*="ui_bubble_rating"]',
+        );
+        if (ratingEl) {
+          const ariaLabel = ratingEl.getAttribute('aria-label') ?? '';
+          const m = /([\d,\.]+)\s*(z|of)\s*5/i.exec(ariaLabel);
+          if (m) {
+            rating = parseFloat(m[1].replace(',', '.'));
+          } else {
+            const bm = /bubble_(\d+)/.exec(ratingEl.className ?? '');
+            if (bm) rating = parseInt(bm[1], 10) / 10;
+          }
         }
 
-        if (!text || text.length < 20) continue;
-
-        // Try to get per-review bubble rating (class "bubble_NN" → N.N)
-        let rating: number | null = null;
-        try {
-          const bubbleCls = await card
-            .locator('[class*="ui_bubble_rating"], [class*="bubble_rating"]')
-            .first()
-            .getAttribute('class', { timeout: 1500 });
-          const m = bubbleCls ? /bubble_(\d+)/.exec(bubbleCls) : null;
-          if (m) rating = parseInt(m[1]!, 10) / 10;
-        } catch { /* no per-review rating */ }
-
-        snippets.push({ text: text.slice(0, 400), rating });
+        results.push({ text, rating });
       }
-    } catch {
-      // extraction failed — return whatever we have
-    }
-    return snippets;
+
+      return results;
+    });
   }
 
-  private async extractSentimentTags(
-    page: Page,
-    scores: {
-      foodScore: number | null;
-      roomsScore: number | null;
-      cleanlinessScore: number | null;
-      serviceScore: number | null;
-      overallRating: number | null;
-    },
-  ): Promise<string[]> {
+  private async extractPhotos(page: Page): Promise<string[]> {
+    const urls: string[] = [];
+
+    try {
+      const og = await page.getAttribute('meta[property="og:image"]', 'content').catch(() => null);
+      if (og?.startsWith('http')) urls.push(og);
+    } catch { /* ignore */ }
+
+    try {
+      const more = await page.evaluate((): string[] =>
+        Array.from(document.querySelectorAll('img'))
+          .flatMap((img) => [
+            img.src,
+            img.getAttribute('data-src') ?? '',
+            img.getAttribute('data-lazyurl') ?? '',
+          ])
+          .filter((u) =>
+            u && (
+              u.includes('tripadvisor.com/media/photo') ||
+              u.includes('dynamic-media-cdn.tripadvisor.com')
+            ),
+          ),
+      );
+      for (const u of more) {
+        if (!urls.includes(u)) urls.push(u);
+      }
+    } catch { /* ignore */ }
+
+    return urls.slice(0, 8);
+  }
+
+  private buildSentimentTags(scores: {
+    overallRating: number | null;
+    foodScore: number | null;
+    roomsScore: number | null;
+    cleanlinessScore: number | null;
+    serviceScore: number | null;
+  }): string[] {
     const tags: string[] = [];
 
-    // Score-based tags
     if (scores.foodScore !== null) {
       if (scores.foodScore >= 4.5) tags.push('jedzenie: wyśmienite');
       else if (scores.foodScore >= 4.0) tags.push('jedzenie: bardzo dobre');
       else if (scores.foodScore >= 3.5) tags.push('jedzenie: dobre');
-      else if (scores.foodScore < 3.0) tags.push('jedzenie: słabe');
+      else tags.push('jedzenie: słabe');
     }
 
     if (scores.roomsScore !== null) {
       if (scores.roomsScore >= 4.5) tags.push('pokoje: świetne');
       else if (scores.roomsScore >= 4.0) tags.push('pokoje: dobre');
-      else if (scores.roomsScore < 3.5) tags.push('pokoje: przeciętne');
+      else tags.push('pokoje: przeciętne');
     }
 
     if (scores.cleanlinessScore !== null) {
@@ -339,82 +419,11 @@ export class TripAdvisorEnricher {
       else tags.push('ogólnie: mieszane opinie');
     }
 
-    // Try to extract specific mentions from review snippets
-    try {
-      const reviewTexts = await page
-        .locator(TA_SELECTORS.reviewText)
-        .allInnerTexts();
-
-      const combined = reviewTexts.slice(0, 10).join(' ').toLowerCase();
-
-      const keywords = [
-        { test: /plaż|beach/, tag: 'plaża wspomniana' },
-        { test: /animacj|animation|entertainment/, tag: 'animacje wspomniane' },
-        { test: /basen|pool/, tag: 'basen wspomniony' },
-        { test: /renovated|odnowion|nowy|new room/, tag: 'niedawno odnowiony' },
-        { test: /old|stary|outdated|przestarzał/, tag: 'wymaga remontu' },
-        { test: /family|rodzin|dzieci|children/, tag: 'przyjazny rodzinom' },
-        { test: /quiet|spokojn|cisz/, tag: 'spokojny' },
-        { test: /party|głośn|noise|loud/, tag: 'głośny' },
-      ];
-
-      for (const { test, tag } of keywords) {
-        if (test.test(combined)) tags.push(tag);
-      }
-    } catch {
-      // review text extraction failed — that's OK, we have score tags
-    }
-
     return tags;
-  }
-
-  private async extractPhotos(page: Page): Promise<string[]> {
-    const urls: string[] = [];
-
-    try {
-      // og:image is most reliable — always in <head>
-      const ogImage = await page
-        .getAttribute('meta[property="og:image"]', 'content')
-        .catch(() => null);
-      if (ogImage && ogImage.startsWith('http')) urls.push(ogImage);
-    } catch { /* ignore */ }
-
-    try {
-      // Extract photo CDN URLs from img tags (src attribute is present even when image load is blocked)
-      const imgUrls = await page.evaluate((): string[] => {
-        const results: string[] = [];
-        document.querySelectorAll('img').forEach((img) => {
-          const candidates = [
-            img.src,
-            img.getAttribute('data-src'),
-            img.getAttribute('data-lazyurl'),
-            img.getAttribute('data-original'),
-          ].filter(Boolean) as string[];
-
-          for (const u of candidates) {
-            if (
-              u &&
-              (u.includes('tripadvisor.com/media/photo') ||
-                u.includes('dynamic-media-cdn.tripadvisor.com'))
-            ) {
-              results.push(u);
-            }
-          }
-        });
-        return results;
-      });
-
-      for (const u of imgUrls) {
-        if (!urls.includes(u)) urls.push(u);
-      }
-    } catch { /* ignore */ }
-
-    return urls.slice(0, 8);
   }
 
   private buildScoreSummary(aspect: string, score: number | null): string | null {
     if (score === null) return null;
-
     if (score >= 4.5) return `Wybitne ${aspect}`;
     if (score >= 4.0) return `Bardzo dobre ${aspect}`;
     if (score >= 3.5) return `Dobre ${aspect}`;
