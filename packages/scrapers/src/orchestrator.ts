@@ -30,13 +30,14 @@ import {
   generateCanonicalName,
   normalizeHotelName,
   CONFIDENCE_THRESHOLDS,
+  type SimilarHotelRecord,
 } from './normalizer/HotelNormalizer.js';
 import {
   getProviderByCode,
   createSearchRun,
   updateSearchRun,
   getDestinationByCanonical,
-  getHotelsByDestination,
+  findSimilarHotelsByName,
   upsertHotel,
   upsertHotelAlias,
   insertOffers,
@@ -265,14 +266,14 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
 
         const destinationId = destRecord?.id ?? null;
 
-        // Load existing hotels for this destination
-        const existingHotels = destinationId
-          ? await getHotelsByDestination(destinationId)
-          : [];
-
         for (const rawOffer of destOffers) {
-          // Match or create hotel
-          const match = findBestHotelMatch(rawOffer, existingHotels, destinationId ?? '');
+          // Use pg_trgm DB function to find similar hotels (replaces Fuse.js client scan)
+          const normalizedName = normalizeHotelName(rawOffer.hotelName);
+          const candidates: SimilarHotelRecord[] = destinationId
+            ? await findSimilarHotelsByName(normalizedName, destinationId) as SimilarHotelRecord[]
+            : [];
+
+          const match = findBestHotelMatch(rawOffer, candidates);
 
           let hotelId: string | null = null;
 
@@ -293,11 +294,11 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
           } else {
             // Create new hotel
             const canonicalName = generateCanonicalName(rawOffer);
-            const normalizedName = normalizeHotelName(canonicalName);
+            const normalizedForUpsert = normalizeHotelName(canonicalName);
 
             hotelId = await upsertHotel({
               canonicalName,
-              normalizedName,
+              normalizedName: normalizedForUpsert,
               destinationId,
               stars: rawOffer.hotelStars,
               locationCity: rawOffer.hotelLocation,
@@ -306,13 +307,6 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
 
             if (hotelId) {
               hotelsCreated++;
-              existingHotels.push({
-                id: hotelId,
-                canonicalName,
-                normalizedName,
-                destinationId: destinationId ?? '',
-                stars: rawOffer.hotelStars,
-              });
 
               await upsertHotelAlias({
                 hotelId,

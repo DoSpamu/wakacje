@@ -24,7 +24,6 @@
     "@wakacje/shared": "workspace:*",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.0",
-    "fuse.js": "^7.0.0",
     "p-limit": "^5.0.0",
     "p-retry": "^6.2.0",
     "patchright": "^1.59.4",

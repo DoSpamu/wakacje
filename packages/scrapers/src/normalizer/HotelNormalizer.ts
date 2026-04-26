@@ -8,7 +8,6 @@
  * 4. Maintaining the hotels + hotel_aliases tables
  */
 
-import Fuse from 'fuse.js';
 import type { RawOffer, BoardType } from '@wakacje/shared';
 
 export interface NormalizedHotel {
@@ -79,32 +78,6 @@ export function normalizeHotelName(name: string): string {
   return normalized;
 }
 
-/**
- * Compute similarity score (0–1) between two normalized hotel names.
- * Uses Fuse.js internally for consistent fuzzy matching.
- */
-export function computeHotelNameSimilarity(nameA: string, nameB: string): number {
-  if (nameA === nameB) return 1.0;
-
-  const normA = normalizeHotelName(nameA);
-  const normB = normalizeHotelName(nameB);
-
-  if (normA === normB) return 0.99;
-
-  // Fuse.js score for single item comparison
-  const fuse = new Fuse([normB], {
-    includeScore: true,
-    threshold: 0.6,
-    minMatchCharLength: 3,
-  });
-
-  const results = fuse.search(normA);
-  if (results.length === 0) return 0;
-
-  // Fuse score is 0 (perfect) to 1 (no match), so invert
-  return Math.max(0, 1 - (results[0]!.score ?? 1));
-}
-
 /** Confidence score thresholds */
 export const CONFIDENCE_THRESHOLDS = {
   HIGH: 0.85,     // Almost certain match
@@ -121,50 +94,37 @@ export interface ExistingHotelRecord {
   stars: number;
 }
 
+/** ExistingHotelRecord augmented with pg_trgm similarity score from DB */
+export interface SimilarHotelRecord extends ExistingHotelRecord {
+  similarity: number;
+}
+
 /**
- * Find the best matching hotel from existing records.
- * Returns the match and its confidence score.
+ * Find the best matching hotel from DB-sourced similarity candidates.
+ * Applies an optional star-match boost on top of the pg_trgm similarity score.
  */
 export function findBestHotelMatch(
   offer: RawOffer,
-  existingHotels: ExistingHotelRecord[],
-  destinationId: string,
+  candidates: SimilarHotelRecord[],
 ): HotelMatch {
-  if (existingHotels.length === 0) {
+  if (candidates.length === 0) {
     return { existingHotelId: null, confidenceScore: 0, isNewHotel: true };
   }
 
-  // Filter by destination first (exact match required)
-  const sameDestination = existingHotels.filter((h) => h.destinationId === destinationId);
-
-  // If no hotels in this destination, it's definitely new
-  if (sameDestination.length === 0) {
-    return { existingHotelId: null, confidenceScore: 0, isNewHotel: true };
-  }
-
-  // Find best fuzzy match
-  let bestMatch: ExistingHotelRecord | null = null;
+  let best: SimilarHotelRecord | null = null;
   let bestScore = 0;
 
-  for (const hotel of sameDestination) {
-    const score = computeHotelNameSimilarity(offer.hotelName, hotel.canonicalName);
-
-    // Boost score if stars match
-    const starBoost = offer.hotelStars === hotel.stars ? 0.05 : 0;
-    const finalScore = Math.min(1, score + starBoost);
-
-    if (finalScore > bestScore) {
-      bestScore = finalScore;
-      bestMatch = hotel;
+  for (const candidate of candidates) {
+    const starBoost = offer.hotelStars === candidate.stars ? 0.05 : 0;
+    const score = Math.min(1, candidate.similarity + starBoost);
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
     }
   }
 
-  if (bestScore >= CONFIDENCE_THRESHOLDS.LOW && bestMatch) {
-    return {
-      existingHotelId: bestMatch.id,
-      confidenceScore: bestScore,
-      isNewHotel: false,
-    };
+  if (best && bestScore >= CONFIDENCE_THRESHOLDS.LOW) {
+    return { existingHotelId: best.id, confidenceScore: bestScore, isNewHotel: false };
   }
 
   return { existingHotelId: null, confidenceScore: 0, isNewHotel: true };
