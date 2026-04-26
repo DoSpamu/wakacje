@@ -12,6 +12,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { TripAdvisorEnricher } from '../enrichment/TripAdvisorEnricher.js';
+import { BookingReviewEnricher } from '../enrichment/BookingReviewEnricher.js';
 import {
   upsertHotelReviewSummary,
   insertHotelPhotos,
@@ -64,10 +65,12 @@ async function main() {
     return;
   }
 
-  logger.info(`Found ${hotels.length} hotels without TripAdvisor data`);
+  logger.info(`Found ${hotels.length} hotels without enrichment data`);
 
-  const enricher = new TripAdvisorEnricher();
-  await enricher.init();
+  const taEnricher = new TripAdvisorEnricher();
+  const bkEnricher = new BookingReviewEnricher();
+  await taEnricher.init();
+  await bkEnricher.init();
 
   let enriched = 0;
   let failed = 0;
@@ -75,34 +78,40 @@ async function main() {
   try {
     for (const hotel of hotels) {
       const location = [hotel.location_city, hotel.location_region].filter(Boolean).join(', ');
-
       logger.info(`Enriching: ${hotel.canonical_name} (${location})`);
 
-      const result = await enricher.enrichHotel(hotel.id, hotel.canonical_name, location);
-
-      if (result.tripadvisor) {
-        await upsertHotelReviewSummary({
-          hotelId: hotel.id,
-          ...result.tripadvisor,
-        });
+      // TripAdvisor
+      const taResult = await taEnricher.enrichHotel(hotel.id, hotel.canonical_name, location);
+      if (taResult.tripadvisor) {
+        await upsertHotelReviewSummary({ hotelId: hotel.id, ...taResult.tripadvisor });
         enriched++;
-        logger.info(`  ✓ rating=${result.tripadvisor.overallRating}, reviews=${result.tripadvisor.reviewCount}`);
+        logger.info(`  TA: rating=${taResult.tripadvisor.overallRating}, snippets=${taResult.tripadvisor.reviewSnippets.length}`);
       } else {
-        failed++;
-        logger.warn(`  ✗ No data returned`);
+        logger.warn(`  TA: no data`);
       }
 
-      if (result.photos.length > 0) {
-        await insertHotelPhotos(hotel.id, result.photos);
-        await updateHotelMedia(hotel.id, { coverPhotoUrl: result.photos[0] });
-        logger.info(`  + ${result.photos.length} photos`);
+      if (taResult.photos.length > 0) {
+        await insertHotelPhotos(hotel.id, taResult.photos);
+        await updateHotelMedia(hotel.id, { coverPhotoUrl: taResult.photos[0] });
+        logger.info(`  + ${taResult.photos.length} photos`);
+      }
+
+      // Booking.com (Polish reviews)
+      const bkResult = await bkEnricher.enrichHotel(hotel.id, hotel.canonical_name, location);
+      if (bkResult.booking) {
+        await upsertHotelReviewSummary({ hotelId: hotel.id, ...bkResult.booking });
+        logger.info(`  BK: rating=${bkResult.booking.overallRating}, snippets=${bkResult.booking.reviewSnippets.length}`);
+      } else {
+        failed++;
+        logger.warn(`  BK: no data`);
       }
     }
   } finally {
-    await enricher.close();
+    await taEnricher.close();
+    await bkEnricher.close();
   }
 
-  logger.info(`Done: ${enriched} enriched, ${failed} failed out of ${hotels.length} hotels`);
+  logger.info(`Done: ${enriched} TA enriched, ${failed} Booking failed, out of ${hotels.length} hotels`);
 }
 
 main().catch((err) => {

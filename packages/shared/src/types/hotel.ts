@@ -50,7 +50,7 @@ export interface HotelReviewSummary {
   createdAt: string;
 }
 
-export type ReviewSource = 'tripadvisor' | 'google';
+export type ReviewSource = 'tripadvisor' | 'google' | 'booking';
 
 export interface HotelWithReviews extends Hotel {
   reviews: HotelReviewSummary[];
