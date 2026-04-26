@@ -91,6 +91,9 @@ export default function HomePage() {
     void fetchOffers(filter, 1);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Close EventSource on unmount
+  useEffect(() => () => { liveAbortRef.current?.abort(); }, []);
+
   const handleSearch = (f: UIFilter) => {
     setFilter(f);
     setPage(1);
@@ -128,7 +131,7 @@ export default function HomePage() {
     params.set('adults', filter.adults.toString());
 
     const evtSource = new EventSource(`/api/live-search?${params.toString()}`);
-
+    liveAbortRef.current = new AbortController();
     liveAbortRef.current.signal.addEventListener('abort', () => evtSource.close());
 
     evtSource.onmessage = (e) => {
@@ -186,7 +189,7 @@ export default function HomePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Szukaj ofert wakacyjnych</h1>
           <p className="text-sm text-slate-500 mt-1">
-            All-Inclusive z R.pl, Exim Tours, Coral Travel, Itaka, Grecos i TUI
+            All-Inclusive z R.pl, Exim Tours, Itaka, Grecos i TUI
           </p>
         </div>
         <div className="flex items-center gap-2">

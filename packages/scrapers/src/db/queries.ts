@@ -6,7 +6,7 @@
 import { supabase } from './supabase.js';
 import { logger } from '../base/logger.js';
 import type { NormalizedOffer } from '../normalizer/OfferNormalizer.js';
-import type { ExistingHotelRecord, SimilarHotelRecord } from '../normalizer/HotelNormalizer.js';
+import type { SimilarHotelRecord } from '../normalizer/HotelNormalizer.js';
 import type { ProviderCode } from '@wakacje/shared';
 
 // ─────────────────────────────────────────────
@@ -100,27 +100,6 @@ export async function getDestinationByCanonical(
 //  Hotels
 // ─────────────────────────────────────────────
 
-export async function getHotelsByDestination(
-  destinationId: string,
-): Promise<ExistingHotelRecord[]> {
-  const { data, error } = await supabase
-    .from('hotels')
-    .select('id, canonical_name, normalized_name, destination_id, stars')
-    .eq('destination_id', destinationId);
-
-  if (error) {
-    logger.warn('Failed to fetch hotels', { error: error.message });
-    return [];
-  }
-
-  return (data ?? []).map((h) => ({
-    id: h.id,
-    canonicalName: h.canonical_name,
-    normalizedName: h.normalized_name,
-    destinationId: h.destination_id ?? destinationId,
-    stars: h.stars,
-  }));
-}
 
 export async function upsertHotel(hotel: {
   canonicalName: string;

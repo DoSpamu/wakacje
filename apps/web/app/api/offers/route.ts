@@ -55,6 +55,8 @@ export async function GET(req: NextRequest) {
   if (boardTypes?.length) query = query.in('board_type', boardTypes);
 
   // Price
+  const priceMin = sp.get('priceMin');
+  if (priceMin) query = query.gte('price_total', parseInt(priceMin, 10));
   const priceMax = sp.get('priceMax');
   if (priceMax) query = query.lte('price_total', parseInt(priceMax, 10));
 

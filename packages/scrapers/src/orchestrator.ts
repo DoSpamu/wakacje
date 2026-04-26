@@ -118,6 +118,7 @@ export interface OrchestratorOptions {
   providers?: SupportedProvider[];
   runEnrichment?: boolean;
   concurrency?: number;
+  enrichLimit?: number;
 }
 
 export interface OrchestratorResult {
@@ -141,6 +142,7 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
   const providers = options.providers ?? ALL_PROVIDERS;
   const runEnrichment = options.runEnrichment ?? true;
   const concurrency = options.concurrency ?? 2;
+  const enrichLimit = options.enrichLimit ?? 20;
 
   // Auto-expire stuck runs from previous failed scrapes
   await expireStuckRuns();
@@ -315,8 +317,8 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
                 confidenceScore: 1.0, // Self-created
               });
 
-              // Enrich new hotel
-              if (enricher && hotelId) {
+              // Enrich new hotel (bounded per run)
+              if (enricher && hotelId && enrichedHotels < enrichLimit) {
                 try {
                   const enrichResult = await enricher.enrichHotel(
                     hotelId,
