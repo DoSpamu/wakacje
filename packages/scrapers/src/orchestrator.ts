@@ -49,7 +49,58 @@ import {
   insertScrapeLogs,
 } from './db/queries.js';
 import { logger } from './base/logger.js';
-import type { ScrapeContext } from './base/types.js';
+import type { ScrapeContext, ScraperResult } from './base/types.js';
+
+const MIN_OFFERS_SANITY = 5;
+const RETRY_DELAYS_MS = [5_000, 10_000] as const;
+
+/** Returns true if the offer count meets the minimum sanity threshold */
+function validateProviderResult(offers: ScraperResult['offers'], providerCode: string): boolean {
+  if (offers.length < MIN_OFFERS_SANITY) {
+    logger.warn(`[${providerCode}] only ${offers.length} offers — below sanity threshold of ${MIN_OFFERS_SANITY}`);
+    return false;
+  }
+  return true;
+}
+
+/** Run a scraper with up to 2 attempts; retry on hard throws or sanity-check failures */
+async function scrapeWithRetry(
+  scraper: { scrape(ctx: ScrapeContext): Promise<ScraperResult> },
+  ctx: ScrapeContext,
+  providerCode: string,
+  maxAttempts = 2,
+): Promise<ScraperResult> {
+  let lastResult: ScraperResult | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await scraper.scrape(ctx);
+      lastResult = result;
+
+      if (validateProviderResult(result.offers, providerCode) || attempt === maxAttempts) {
+        return result;
+      }
+
+      logger.info(`[${providerCode}] sanity check failed on attempt ${attempt}/${maxAttempts}, retrying`);
+    } catch (err) {
+      logger.warn(`[${providerCode}] attempt ${attempt}/${maxAttempts} threw: ${String(err)}`);
+      if (attempt === maxAttempts) {
+        return lastResult ?? {
+          providerCode: providerCode as ScraperResult['providerCode'],
+          searchRunId: ctx.searchRunId,
+          offers: [],
+          errors: [{ message: String(err), timestamp: new Date().toISOString(), retryable: false }],
+          duration: 0,
+          pagesVisited: 0,
+        };
+      }
+    }
+
+    await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]!));
+  }
+
+  return lastResult!;
+}
 
 const PROVIDER_SCRAPERS = {
   rpl: RplScraper,
@@ -150,7 +201,7 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
           const ScraperClass = PROVIDER_SCRAPERS[providerCode];
           const scraper = new ScraperClass();
 
-          const result = await scraper.scrape(ctx);
+          const result = await scrapeWithRetry(scraper, ctx, providerCode);
 
           // Update search run
           await updateSearchRun(searchRunId, {
