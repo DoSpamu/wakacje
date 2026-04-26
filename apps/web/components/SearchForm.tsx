@@ -249,6 +249,40 @@ export default function SearchForm({ defaultFilter, onSearch }: Props) {
                   }
                 />
               </div>
+
+              {/* Review score filters */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Min. ocena TA</label>
+                  <select
+                    className="input"
+                    value={filter.minTaRating ?? ''}
+                    onChange={(e) =>
+                      set('minTaRating', e.target.value ? parseFloat(e.target.value) : undefined)
+                    }
+                  >
+                    <option value="">Dowolna</option>
+                    <option value="3.5">3.5+</option>
+                    <option value="4.0">4.0+</option>
+                    <option value="4.5">4.5+</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Min. jedzenie TA</label>
+                  <select
+                    className="input"
+                    value={filter.minFoodScore ?? ''}
+                    onChange={(e) =>
+                      set('minFoodScore', e.target.value ? parseFloat(e.target.value) : undefined)
+                    }
+                  >
+                    <option value="">Dowolne</option>
+                    <option value="3.5">3.5+</option>
+                    <option value="4.0">4.0+</option>
+                    <option value="4.5">4.5+</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 

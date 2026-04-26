@@ -64,6 +64,12 @@ export async function GET(req: NextRequest) {
   const providers = sp.get('providers')?.split(',').filter(Boolean);
   if (providers?.length) query = query.in('provider_code', providers);
 
+  // Review score filters
+  const minTaRating = sp.get('minTaRating');
+  if (minTaRating) query = query.gte('tripadvisor_rating', parseFloat(minTaRating));
+  const minFoodScore = sp.get('minFoodScore');
+  if (minFoodScore) query = query.gte('tripadvisor_food_score', parseFloat(minFoodScore));
+
   // Sorting
   const sortBy = sp.get('sortBy') ?? 'composite_score';
   const sortOrder = sp.get('sortOrder') ?? 'desc';

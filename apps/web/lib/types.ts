@@ -59,6 +59,8 @@ export interface UIFilter {
   boardTypes: string[];
   priceMax?: number;
   providers?: string[];
+  minTaRating?: number;
+  minFoodScore?: number;
   sortBy: string;
   sortOrder: 'asc' | 'desc';
 }
@@ -66,7 +68,7 @@ export interface UIFilter {
 /** Live search result — returned by /api/live-search (no DB IDs, no enrichment) */
 export interface LiveOffer {
   id: string;
-  providerCode: 'itaka';
+  providerCode: 'itaka' | 'wakacjepl';
   hotelName: string;
   hotelStars: number;
   hotelLocation: string;
@@ -81,6 +83,8 @@ export interface LiveOffer {
   currency: string;
   adults: number;
   children: number;
+  /** Tour operator name (wakacje.pl aggregates ~35 operators) */
+  tourOperator?: string;
   sourceUrl: string;
 }
 

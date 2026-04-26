@@ -20,6 +20,60 @@ const DEFAULT_FILTER: UIFilter = {
   sortOrder: 'desc',
 };
 
+function parseFilterFromUrl(sp: URLSearchParams): Partial<UIFilter> {
+  const out: Partial<UIFilter> = {};
+  const destinations = sp.get('destinations')?.split(',').filter(Boolean);
+  if (destinations?.length) out.destinations = destinations;
+  const airports = sp.get('airports')?.split(',').filter(Boolean);
+  if (airports?.length) out.airports = airports;
+  if (sp.get('dateFrom')) out.dateFrom = sp.get('dateFrom')!;
+  if (sp.get('dateTo')) out.dateTo = sp.get('dateTo')!;
+  if (sp.get('nightsMin')) out.nightsMin = parseInt(sp.get('nightsMin')!, 10);
+  if (sp.get('nightsMax')) out.nightsMax = parseInt(sp.get('nightsMax')!, 10);
+  if (sp.get('adults')) out.adults = parseInt(sp.get('adults')!, 10);
+  const s = sp.get('stars')?.split(',').map(Number).filter(Boolean);
+  if (s?.length) out.stars = s;
+  const bt = sp.get('boardTypes')?.split(',').filter(Boolean);
+  if (bt?.length) out.boardTypes = bt;
+  if (sp.get('priceMax')) out.priceMax = parseInt(sp.get('priceMax')!, 10);
+  const providers = sp.get('providers')?.split(',').filter(Boolean);
+  if (providers?.length) out.providers = providers;
+  if (sp.get('minTaRating')) out.minTaRating = parseFloat(sp.get('minTaRating')!);
+  if (sp.get('minFoodScore')) out.minFoodScore = parseFloat(sp.get('minFoodScore')!);
+  if (sp.get('sortBy')) out.sortBy = sp.get('sortBy')!;
+  if (sp.get('sortOrder')) out.sortOrder = sp.get('sortOrder') as 'asc' | 'desc';
+  return out;
+}
+
+function filterToUrlParams(f: UIFilter): URLSearchParams {
+  const p = new URLSearchParams();
+  if (f.destinations.length) p.set('destinations', f.destinations.join(','));
+  if (f.airports.length) p.set('airports', f.airports.join(','));
+  if (f.dateFrom) p.set('dateFrom', f.dateFrom);
+  if (f.dateTo) p.set('dateTo', f.dateTo);
+  p.set('nightsMin', f.nightsMin.toString());
+  p.set('nightsMax', f.nightsMax.toString());
+  p.set('adults', f.adults.toString());
+  if (f.stars.length) p.set('stars', f.stars.join(','));
+  if (f.boardTypes.length) p.set('boardTypes', f.boardTypes.join(','));
+  if (f.priceMax) p.set('priceMax', f.priceMax.toString());
+  if (f.providers?.length) p.set('providers', f.providers.join(','));
+  if (f.minTaRating) p.set('minTaRating', f.minTaRating.toString());
+  if (f.minFoodScore) p.set('minFoodScore', f.minFoodScore.toString());
+  p.set('sortBy', f.sortBy);
+  p.set('sortOrder', f.sortOrder);
+  return p;
+}
+
+function formatAge(isoStr: string): string {
+  const ageMs = Date.now() - new Date(isoStr).getTime();
+  const h = Math.floor(ageMs / 3_600_000);
+  const m = Math.floor((ageMs % 3_600_000) / 60_000);
+  if (h > 48) return `${Math.floor(h / 24)}d temu`;
+  if (h > 0) return `${h}h ${m}m temu`;
+  return `${m}m temu`;
+}
+
 export default function HomePage() {
   const [filter, setFilter] = useState<UIFilter>(DEFAULT_FILTER);
   const [offers, setOffers] = useState<OfferRow[]>([]);
@@ -29,6 +83,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [dataAge, setDataAge] = useState<string>('');
 
   // Live search state
   const [liveOffers, setLiveOffers] = useState<LiveOffer[]>([]);
@@ -59,6 +114,8 @@ export default function HomePage() {
       if (f.boardTypes.length) params.set('boardTypes', f.boardTypes.join(','));
       if (f.priceMax) params.set('priceMax', f.priceMax.toString());
       if (f.providers?.length) params.set('providers', f.providers.join(','));
+      if (f.minTaRating) params.set('minTaRating', f.minTaRating.toString());
+      if (f.minFoodScore) params.set('minFoodScore', f.minFoodScore.toString());
       params.set('sortBy', f.sortBy);
       params.set('sortOrder', f.sortOrder);
       params.set('page', p.toString());
@@ -76,6 +133,13 @@ export default function HomePage() {
         setTotal(json.total);
         setPage(json.page);
         setPages(json.pages);
+
+        // Compute data freshness from newest scraped_at
+        const newestAt = (json.data ?? []).reduce<string>(
+          (max, o) => (o.scraped_at > max ? o.scraped_at : max),
+          '',
+        );
+        if (newestAt) setDataAge(formatAge(newestAt));
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           setError(err instanceof Error ? err.message : 'Błąd ładowania danych');
@@ -87,8 +151,15 @@ export default function HomePage() {
     [],
   );
 
+  // Read filter from URL on mount (enables shareable links + map "Pokaz" links)
   useEffect(() => {
-    void fetchOffers(filter, 1);
+    const sp = new URLSearchParams(window.location.search);
+    const fromUrl = parseFilterFromUrl(sp);
+    const initial = Object.keys(fromUrl).length > 0
+      ? { ...DEFAULT_FILTER, ...fromUrl }
+      : DEFAULT_FILTER;
+    if (Object.keys(fromUrl).length > 0) setFilter(initial);
+    void fetchOffers(initial, 1);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close EventSource on unmount
@@ -98,6 +169,8 @@ export default function HomePage() {
     setFilter(f);
     setPage(1);
     setSelected(new Set());
+    // Persist filter in URL so it's shareable / survives refresh
+    window.history.replaceState(null, '', `?${filterToUrlParams(f).toString()}`);
     void fetchOffers(f, 1);
   };
 
@@ -138,13 +211,14 @@ export default function HomePage() {
       try {
         const msg = JSON.parse(e.data as string) as {
           type: string;
+          provider?: string;
           destination?: string;
           offers?: LiveOffer[];
           error?: string;
         };
 
         if (msg.type === 'batch') {
-          const label = msg.destination ?? '';
+          const label = `[${msg.provider ?? '?'}] ${msg.destination ?? ''}`;
           if (msg.offers && msg.offers.length > 0) {
             setLiveOffers((prev) => [...prev, ...msg.offers!]);
           }
@@ -231,6 +305,11 @@ export default function HomePage() {
           ) : (
             <p className="text-sm text-slate-600">
               Znaleziono <span className="font-semibold text-slate-900">{total.toLocaleString('pl-PL')}</span> ofert
+              {dataAge && (
+                <span className="ml-2 text-xs text-slate-400" title="Wiek najnowszej oferty w wynikach">
+                  · dane: {dataAge}
+                </span>
+              )}
               {selected.size > 0 && (
                 <span className="ml-2 text-blue-600">
                   ({selected.size} zaznaczonych)
@@ -336,7 +415,7 @@ export default function HomePage() {
               <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Wyniki na żywo — Itaka
+              Wyniki na żywo — Itaka + Wakacje.pl
               {liveStatus === 'loading' && (
                 <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
               )}
@@ -363,12 +442,13 @@ export default function HomePage() {
                   <tr className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
                     <th className="px-4 py-2 text-left font-medium">Hotel</th>
                     <th className="px-4 py-2 text-left font-medium">Kraj</th>
+                    <th className="px-3 py-2 text-left font-medium">Operator</th>
                     <th className="px-3 py-2 text-center font-medium">Gwiazd</th>
                     <th className="px-3 py-2 text-center font-medium">Wylot</th>
                     <th className="px-3 py-2 text-center font-medium">Nocy</th>
                     <th className="px-3 py-2 text-center font-medium">Wyżyw.</th>
                     <th className="px-4 py-2 text-right font-medium">Cena</th>
-                    <th className="px-3 py-2 text-center font-medium"></th>
+                    <th className="px-3 py-2 text-center font-medium">Źródło</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -378,6 +458,9 @@ export default function HomePage() {
                         {o.hotelName}
                       </td>
                       <td className="px-4 py-2.5 text-slate-500">{o.destinationRaw}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[120px] truncate">
+                        {o.tourOperator || (o.providerCode === 'itaka' ? 'Itaka' : 'Wakacje.pl')}
+                      </td>
                       <td className="px-3 py-2.5 text-center text-slate-500">{'★'.repeat(o.hotelStars)}</td>
                       <td className="px-3 py-2.5 text-center text-slate-500 whitespace-nowrap">
                         {o.departureDate} · {o.departureAirport}
@@ -401,9 +484,9 @@ export default function HomePage() {
                           href={o.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-700 text-xs"
+                          className={`text-xs ${o.providerCode === 'wakacjepl' ? 'text-orange-500 hover:text-orange-700' : 'text-blue-500 hover:text-blue-700'}`}
                         >
-                          Itaka →
+                          {o.providerCode === 'wakacjepl' ? 'Wakacje.pl →' : 'Itaka →'}
                         </a>
                       </td>
                     </tr>

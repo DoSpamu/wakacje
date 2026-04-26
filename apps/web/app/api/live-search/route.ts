@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { searchItakaLive, type LiveSearchParams } from '@/lib/live-search/itaka';
+import { searchWakacjePlLive } from '@/lib/live-search/wakacjepl';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,9 +44,22 @@ export async function GET(request: NextRequest) {
       };
 
       try {
-        for await (const { destination, offers, error } of searchItakaLive(params)) {
-          send({ type: 'batch', destination, offers, error });
-        }
+        // Run Itaka and Wakacje.pl in parallel — yield whichever finishes first
+        const itakaGen = searchItakaLive(params);
+        const wakacjePlGen = searchWakacjePlLive(params.destinations);
+
+        await Promise.all([
+          (async () => {
+            for await (const { destination, offers, error } of itakaGen) {
+              send({ type: 'batch', provider: 'itaka', destination, offers, error });
+            }
+          })(),
+          (async () => {
+            for await (const { destination, offers, error } of wakacjePlGen) {
+              send({ type: 'batch', provider: 'wakacjepl', destination, offers, error });
+            }
+          })(),
+        ]);
       } catch (err) {
         send({ type: 'error', message: String(err) });
       } finally {

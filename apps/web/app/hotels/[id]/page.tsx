@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import { createServerClient } from '@/lib/supabase';
 import { formatRating, stars, getScoreClass } from '@/lib/scoring';
+import PriceHistoryChart, { type PricePoint } from '@/components/PriceHistoryChart';
+import PriceAlertForm from '@/components/PriceAlertForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,8 +27,8 @@ export default async function HotelPage({ params }: Props) {
 
   if (!hotel) notFound();
 
-  // Photos + offers fetched in parallel
-  const [{ data: photosData }, { data: offers }] = await Promise.all([
+  // Photos, offers, and price history fetched in parallel
+  const [{ data: photosData }, { data: offers }, { data: priceRaw }] = await Promise.all([
     supabase
       .from('hotel_photos')
       .select('url, caption')
@@ -40,7 +42,35 @@ export default async function HotelPage({ params }: Props) {
       .eq('is_available', true)
       .order('price_total', { ascending: true })
       .limit(50),
+    supabase
+      .from('offers')
+      .select('price_total, scraped_at')
+      .eq('hotel_id', params.id)
+      .order('scraped_at', { ascending: true })
+      .limit(500),
   ]);
+
+  // Aggregate min price per calendar day
+  const priceByDate = new Map<string, number>();
+  for (const o of priceRaw ?? []) {
+    const date = String(o.scraped_at).slice(0, 10);
+    const current = priceByDate.get(date);
+    if (!current || (o.price_total as number) < current) priceByDate.set(date, o.price_total as number);
+  }
+  const priceHistory: PricePoint[] = [...priceByDate.entries()].map(([date, price]) => ({ date, price }));
+
+  // Price drop badge: compare last price to the price from ~7 days ago
+  const lastPrice = priceHistory[priceHistory.length - 1]?.price ?? null;
+  const oldPrice = priceHistory.length >= 3
+    ? priceHistory[Math.max(0, priceHistory.length - 7)]?.price ?? null
+    : null;
+  const priceDrop = lastPrice && oldPrice && oldPrice - lastPrice > 200 ? oldPrice - lastPrice : null;
+
+  // Cheapest current offer price for alert form default
+  const cheapestOffer = (offers ?? []).reduce<number | null>((min, o) => {
+    const p = (o as Record<string, number>)['price_total'];
+    return min === null || p < min ? p : min;
+  }, null);
 
   const reviews = (hotel.hotel_reviews_summary ?? []) as Array<{
     source: string;
@@ -59,6 +89,7 @@ export default async function HotelPage({ params }: Props) {
   }>;
 
   const taReview = reviews.find((r) => r.source === 'tripadvisor');
+  const bkReview = reviews.find((r) => r.source === 'booking');
   const gReview = reviews.find((r) => r.source === 'google');
   const dest = hotel.destinations as { canonical_name: string; display_name: string; country_code: string } | null;
   const h = hotel as Record<string, unknown>;
@@ -133,12 +164,17 @@ export default async function HotelPage({ params }: Props) {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{hotel.canonical_name}</h1>
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="stars text-lg">{stars(hotel.stars)}</span>
               <span className="text-sm text-slate-500">
                 {hotel.location_city}{hotel.location_region ? `, ${hotel.location_region}` : ''}
                 {dest && ` — ${dest.display_name}`}
               </span>
+              {priceDrop && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                  ↓ {priceDrop.toLocaleString('pl-PL')} zl taniej niz tydzien temu
+                </span>
+              )}
             </div>
           </div>
 
@@ -153,7 +189,7 @@ export default async function HotelPage({ params }: Props) {
       </div>
 
       {/* Reviews */}
-      {(taReview || gReview) && (
+      {(taReview || bkReview || gReview) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {taReview && (
             <div className="card p-5">
@@ -223,6 +259,70 @@ export default async function HotelPage({ params }: Props) {
             </div>
           )}
 
+          {bkReview && (
+            <div className="card p-5">
+              <h2 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <span className="text-blue-600">●</span> Booking.com
+                <span className="text-xs text-slate-400 font-normal">(opinie po polsku)</span>
+              </h2>
+
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-3xl font-bold text-slate-900">{formatRating(bkReview.overall_rating)}</span>
+                <div>
+                  <div className="stars">{stars(Math.round(bkReview.overall_rating ?? 0))}</div>
+                  <div className="text-xs text-slate-400">{bkReview.review_count?.toLocaleString('pl-PL')} opinii</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {[
+                  { label: 'Jedzenie', value: bkReview.food_score, summary: bkReview.food_summary },
+                  { label: 'Pokoje', value: bkReview.rooms_score, summary: bkReview.rooms_summary },
+                  { label: 'Czystość', value: bkReview.cleanliness_score, summary: null },
+                  { label: 'Obsługa', value: bkReview.service_score, summary: null },
+                ].filter((r) => r.value !== null).map(({ label, value, summary }) => (
+                  <div key={label}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600">{label}</span>
+                      <span className="text-xs font-semibold">{formatRating(value)}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600"
+                        style={{ width: `${((value ?? 0) / 5) * 100}%` }}
+                      />
+                    </div>
+                    {summary && <p className="text-xs text-slate-500 mt-0.5">{summary}</p>}
+                  </div>
+                ))}
+              </div>
+
+              {bkReview.sentiment_tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-4">
+                  {bkReview.sentiment_tags.map((tag) => (
+                    <span key={tag} className="badge bg-blue-50 text-blue-700 text-xs">{tag}</span>
+                  ))}
+                </div>
+              )}
+
+              {(bkReview.review_snippets ?? []).length > 0 && (
+                <div className="mt-4 space-y-2.5">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Co mówią Polacy</h3>
+                  {bkReview.review_snippets.map((s, i) => (
+                    <blockquote key={i} className="rounded-lg bg-blue-50 px-3 py-2.5 border-l-2 border-blue-300">
+                      <p className="text-xs text-slate-700 leading-relaxed">{s.text}</p>
+                      {s.rating !== null && (
+                        <div className="mt-1 text-xs text-slate-400">
+                          {'★'.repeat(Math.round(s.rating))}{'☆'.repeat(5 - Math.round(s.rating))}
+                        </div>
+                      )}
+                    </blockquote>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {gReview && (
             <div className="card p-5">
               <h2 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
@@ -269,6 +369,24 @@ export default async function HotelPage({ params }: Props) {
           </a>
         </div>
       )}
+
+      {/* Price history + alert form */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {priceHistory.length >= 2 && (
+          <div className="card p-5 md:col-span-2">
+            <h2 className="font-semibold text-slate-700 mb-1">Historia cen</h2>
+            <p className="text-xs text-slate-400 mb-4">Najtańsza oferta dla tego hotelu per dzień scrape&apos;owania</p>
+            <PriceHistoryChart data={priceHistory} />
+          </div>
+        )}
+        {cheapestOffer && (
+          <PriceAlertForm
+            hotelId={params.id}
+            hotelName={hotel.canonical_name}
+            currentPrice={cheapestOffer}
+          />
+        )}
+      </div>
 
       {/* Offers grouped by provider */}
       <div>

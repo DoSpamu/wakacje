@@ -31,13 +31,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a href="/" className="hover:text-slate-900 transition-colors">Szukaj</a>
                 <a href="/compare" className="hover:text-slate-900 transition-colors">Porównaj</a>
                 <a href="/history" className="hover:text-slate-900 transition-colors">Historia</a>
+                <a href="/map" className="hover:text-slate-900 transition-colors">Mapa</a>
               </nav>
 
               {/* Mobile nav */}
               <nav className="flex sm:hidden items-center gap-4 text-sm font-medium text-slate-600">
                 <a href="/" className="hover:text-slate-900">Szukaj</a>
                 <a href="/compare" className="hover:text-slate-900">Porównaj</a>
-                <a href="/history" className="hover:text-slate-900">Historia</a>
+                <a href="/map" className="hover:text-slate-900">Mapa</a>
               </nav>
             </div>
           </div>
