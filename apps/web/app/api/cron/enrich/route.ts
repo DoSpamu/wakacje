@@ -9,8 +9,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const token = process.env.GITHUB_PAT;
-  const repo = process.env.GITHUB_REPO; // e.g. "DoSpamu/wakacje"
+  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPO;
 
   if (!token || !repo) {
     return NextResponse.json({ error: 'GITHUB_PAT or GITHUB_REPO not configured' }, { status: 500 });
