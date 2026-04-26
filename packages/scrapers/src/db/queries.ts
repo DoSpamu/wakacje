@@ -6,7 +6,7 @@
 import { supabase } from './supabase.js';
 import { logger } from '../base/logger.js';
 import type { NormalizedOffer } from '../normalizer/OfferNormalizer.js';
-import type { ExistingHotelRecord } from '../normalizer/HotelNormalizer.js';
+import type { ExistingHotelRecord, SimilarHotelRecord } from '../normalizer/HotelNormalizer.js';
 import type { ProviderCode } from '@wakacje/shared';
 
 // ─────────────────────────────────────────────
@@ -443,7 +443,7 @@ export async function findSimilarHotelsByName(
   destinationId: string | null,
   minSimilarity = 0.4,
   limit = 5,
-): Promise<ExistingHotelRecord[]> {
+): Promise<SimilarHotelRecord[]> {
   const { data, error } = await supabase.rpc('find_similar_hotels', {
     p_normalized_name: normalizedName,
     p_destination_id: destinationId ?? null,
@@ -469,6 +469,7 @@ export async function findSimilarHotelsByName(
     normalizedName: row.normalized_name,
     destinationId: row.destination_id,
     stars: row.stars,
+    similarity: row.similarity,
   }));
 }
 

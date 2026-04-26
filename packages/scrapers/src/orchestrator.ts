@@ -30,7 +30,6 @@ import {
   generateCanonicalName,
   normalizeHotelName,
   CONFIDENCE_THRESHOLDS,
-  type SimilarHotelRecord,
 } from './normalizer/HotelNormalizer.js';
 import {
   getProviderByCode,
@@ -269,8 +268,8 @@ export async function runScrape(options: OrchestratorOptions = {}): Promise<Orch
         for (const rawOffer of destOffers) {
           // Use pg_trgm DB function to find similar hotels (replaces Fuse.js client scan)
           const normalizedName = normalizeHotelName(rawOffer.hotelName);
-          const candidates: SimilarHotelRecord[] = destinationId
-            ? await findSimilarHotelsByName(normalizedName, destinationId) as SimilarHotelRecord[]
+          const candidates = destinationId
+            ? await findSimilarHotelsByName(normalizedName, destinationId)
             : [];
 
           const match = findBestHotelMatch(rawOffer, candidates);
