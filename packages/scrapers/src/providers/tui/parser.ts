@@ -8,12 +8,12 @@ export function parseTuiPrice(raw: string): number {
 }
 
 export function parseTuiStars(raw: string): number {
-  const match = /(\d+)/.exec(raw);
+  const match = raw.match(/(\d+)/);
   return match ? Math.min(5, parseInt(match[1]!, 10)) : 4;
 }
 
 export function parseTuiNights(raw: string): number {
-  const match = /(\d+)/.exec(raw);
+  const match = raw.match(/(\d+)/);
   return match ? parseInt(match[1]!, 10) : 7;
 }
 
@@ -31,42 +31,27 @@ export function parseTuiBoardType(raw: string): RawOffer['boardType'] {
 }
 
 export function parseTuiDate(raw: string): string {
-  const ddmmyyyy = /(\d{2})\.(\d{2})\.(\d{4})/.exec(raw);
+  const ddmmyyyy = raw.match(/(\d{2})\.(\d{2})\.(\d{4})/);
   if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
-  const iso = /(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return raw.slice(0, 10);
   return new Date().toISOString().split('T')[0]!;
 }
 
 export function parseTuiAirport(raw: string): string {
-  const match = /\(([A-Z]{3})\)/.exec(raw) ?? /([A-Z]{3})/.exec(raw);
+  const match = raw.match(/\(([A-Z]{3})\)/) ?? raw.match(/([A-Z]{3})/);
   if (match) return match[1]!;
   if (raw.includes('Katowice')) return 'KTW';
   if (raw.includes('Kraków') || raw.includes('Krakow')) return 'KRK';
   return 'KTW';
 }
 
-/** Try to extract TUI offer data from window state or Next.js data */
-async function parseTuiWindowState(page: Page): Promise<RawOffer[]> {
+/** Pure: build RawOffer[] from TUI window state object (no browser dependency) */
+export function parseTuiWindowStateData(data: unknown): RawOffer[] {
   try {
-    const windowData = await page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const win = window as any;
-      // TUI might expose state in various forms
-      return (
-        win.__TUI_STATE__ ??
-        win.__INITIAL_STATE__ ??
-        win.tuiState ??
-        null
-      );
-    });
-
-    if (!windowData) return [];
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = windowData as any;
-    const offerList = data?.offers ?? data?.results ?? data?.searchResults?.offers ?? [];
-
+    const d = data as any;
+    const offerList = d?.offers ?? d?.results ?? d?.searchResults?.offers ?? [];
     if (!Array.isArray(offerList)) return [];
 
     return offerList.map((raw: unknown) => {
@@ -103,16 +88,36 @@ async function parseTuiWindowState(page: Page): Promise<RawOffer[]> {
   }
 }
 
+/** Try to extract TUI offer data from window state or Next.js data */
+async function parseTuiWindowState(page: Page): Promise<RawOffer[]> {
+  try {
+    const windowData = await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const win = window as any;
+      return (
+        win.__TUI_STATE__ ??
+        win.__INITIAL_STATE__ ??
+        win.tuiState ??
+        null
+      );
+    });
+
+    if (!windowData) return [];
+    return parseTuiWindowStateData(windowData);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Parse TUI OfferCodeWS from offer URL.
  *
  * Format: [3-dep-airport][3-dest-code][8-dep-date][4-dep-time][8-dup-dep][8-ret-date][4-ret-time]L[2-nights][8-hotel]...
  * Example: KTWJGA20260506055020260506202605130800L07VRN85058APX1UA02...
  */
-function parseTuiOfferCode(offerUrl: string): { depAirport: string; depDate: string; retDate: string; nights: number } | null {
-  const codeMatch = /\/OfferCodeWS\/([A-Z0-9]+)/.exec(offerUrl);
-  if (!codeMatch) return null;
-  const code = codeMatch[1]!;
+export function parseTuiOfferCode(offerUrl: string): { depAirport: string; depDate: string; retDate: string; nights: number } | null {
+  const code = offerUrl.match(/\/OfferCodeWS\/([A-Z0-9]+)/)?.[1];
+  if (!code) return null;
   if (code.length < 41) return null;
 
   try {
@@ -135,6 +140,65 @@ function parseTuiOfferCode(offerUrl: string): { depAirport: string; depDate: str
   }
 }
 
+/** Pure: build RawOffer[] from an array of JSON-LD objects (no browser dependency) */
+export function parseTuiJsonLdItems(jsonLdData: unknown[]): RawOffer[] {
+  const offers: RawOffer[] = [];
+
+  for (const ld of jsonLdData) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const schema = ld as any;
+    const itemList = schema?.['@type'] === 'ItemList'
+      ? schema.itemListElement
+      : schema?.itemListElement ?? [];
+
+    if (!Array.isArray(itemList)) continue;
+
+    for (const item of itemList) {
+      try {
+        const url = String(item?.url ?? '');
+        const name = String(item?.name ?? '');
+        if (!name || !url) continue;
+
+        const pathMatch = url.match(/\/wypoczynek\/([^/]+)\/([^/]+)\/([^/]+)\//);
+        const country = pathMatch?.[1] ?? '';
+        const region = pathMatch?.[2] ?? '';
+
+        const codeInfo = parseTuiOfferCode(url);
+        if (!codeInfo) continue;
+
+        const offerCodeWS = url.match(/\/OfferCodeWS\/([A-Z0-9]+)/)?.[1] ?? '';
+        let boardType: RawOffer['boardType'] = 'all-inclusive';
+        if (offerCodeWS.includes('UA0') || offerCodeWS.includes('XX')) boardType = 'ultra-all-inclusive';
+        else if (offerCodeWS.includes('HB')) boardType = 'half-board';
+        else if (offerCodeWS.includes('FB')) boardType = 'full-board';
+        else if (offerCodeWS.includes('BB')) boardType = 'bed-and-breakfast';
+        else if (offerCodeWS.includes('RO') && !offerCodeWS.includes('ROUAPX')) boardType = 'room-only';
+
+        offers.push({
+          providerCode: 'tui',
+          hotelName: name,
+          hotelStars: 4,
+          hotelLocation: region.replace(/-/g, ' '),
+          destinationRaw: country,
+          departureAirport: codeInfo.depAirport,
+          departureDate: codeInfo.depDate,
+          returnDate: codeInfo.retDate,
+          nights: codeInfo.nights,
+          boardType,
+          priceTotal: 0,
+          pricePerPerson: 0,
+          currency: 'PLN',
+          adults: 2,
+          children: 0,
+          sourceUrl: url,
+        });
+      } catch { /* skip malformed */ }
+    }
+  }
+
+  return offers;
+}
+
 /** Parse TUI JSON-LD ItemList for hotel offers */
 async function parseTuiJsonLd(page: Page): Promise<RawOffer[]> {
   try {
@@ -147,65 +211,7 @@ async function parseTuiJsonLd(page: Page): Promise<RawOffer[]> {
       return results;
     });
 
-    const offers: RawOffer[] = [];
-
-    for (const ld of jsonLdData as unknown[]) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const schema = ld as any;
-      const itemList = schema?.['@type'] === 'ItemList'
-        ? schema.itemListElement
-        : schema?.itemListElement ?? [];
-
-      if (!Array.isArray(itemList)) continue;
-
-      for (const item of itemList) {
-        try {
-          const url = String(item?.url ?? '');
-          const name = String(item?.name ?? '');
-          if (!name || !url) continue;
-
-          // Extract destination from URL path: /wypoczynek/[country]/[region]/[hotel]/
-          const pathMatch = /\/wypoczynek\/([^/]+)\/([^/]+)\/([^/]+)\//.exec(url);
-          const country = pathMatch?.[1] ?? '';
-          const region = pathMatch?.[2] ?? '';
-
-          // Decode OfferCodeWS for departure info
-          const codeInfo = parseTuiOfferCode(url);
-          if (!codeInfo) continue;
-
-          // Try to detect board type from URL code (UA = ultra-AI, AI = all-inclusive)
-          const codeMatch = /\/OfferCodeWS\/([A-Z0-9]+)/.exec(url);
-          const code = codeMatch?.[1] ?? '';
-          let boardType: RawOffer['boardType'] = 'all-inclusive';
-          if (code.includes('UA0') || code.includes('XX')) boardType = 'ultra-all-inclusive';
-          else if (code.includes('HB')) boardType = 'half-board';
-          else if (code.includes('FB')) boardType = 'full-board';
-          else if (code.includes('BB')) boardType = 'bed-and-breakfast';
-          else if (code.includes('RO') && !code.includes('ROUAPX')) boardType = 'room-only';
-
-          offers.push({
-            providerCode: 'tui',
-            hotelName: name,
-            hotelStars: 4, // not in JSON-LD, will be enriched
-            hotelLocation: region.replace(/-/g, ' '),
-            destinationRaw: country,
-            departureAirport: codeInfo.depAirport,
-            departureDate: codeInfo.depDate,
-            returnDate: codeInfo.retDate,
-            nights: codeInfo.nights,
-            boardType,
-            priceTotal: 0,    // not in JSON-LD — marked for DOM price extraction below
-            pricePerPerson: 0,
-            currency: 'PLN',
-            adults: 2,
-            children: 0,
-            sourceUrl: url,
-          });
-        } catch { /* skip malformed */ }
-      }
-    }
-
-    return offers;
+    return parseTuiJsonLdItems(jsonLdData as unknown[]);
   } catch {
     return [];
   }
