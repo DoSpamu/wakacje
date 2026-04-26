@@ -1,0 +1,46 @@
+{
+  "props": {
+    "pageProps": {
+      "offers": [
+        {
+          "id": "rpl-001",
+          "hotelName": "Crystal Palace Luxury Resort",
+          "stars": 5,
+          "location": "Side",
+          "destination": "Turcja",
+          "country": "Turcja",
+          "departureAirport": "KTW",
+          "departureDate": "2026-06-01",
+          "returnDate": "2026-06-08",
+          "nights": 7,
+          "board": "All Inclusive",
+          "priceTotal": 6598,
+          "pricePerPerson": 3299,
+          "currency": "PLN",
+          "adults": 2,
+          "children": 0,
+          "url": "https://r.pl/oferta/crystal-palace/rpl-001"
+        },
+        {
+          "id": "rpl-002",
+          "hotelName": "Sherwood Breezes Resort",
+          "stars": 5,
+          "location": "Lara",
+          "destination": "Turcja",
+          "country": "Turcja",
+          "departureAirport": "KRK",
+          "departureDate": "2026-07-10",
+          "returnDate": "2026-07-21",
+          "nights": 11,
+          "board": "Ultra All Inclusive",
+          "priceTotal": 8400,
+          "pricePerPerson": 4200,
+          "currency": "PLN",
+          "adults": 2,
+          "children": 0,
+          "url": "https://r.pl/oferta/sherwood-breezes/rpl-002"
+        }
+      ]
+    }
+  }
+}

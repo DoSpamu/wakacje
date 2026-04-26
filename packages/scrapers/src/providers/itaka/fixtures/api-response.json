@@ -1,0 +1,86 @@
+{
+  "pageProps": {
+    "initialQueryState": {
+      "queries": [
+        {
+          "state": {
+            "data": {
+              "main": {
+                "rates": {
+                  "list": [
+                    {
+                      "id": "itaka-rate-001",
+                      "price": 349900,
+                      "currency": "PLN",
+                      "participants": [
+                        { "type": "adult", "price": 174950 },
+                        { "type": "adult", "price": 174950 }
+                      ],
+                      "segments": [
+                        {
+                          "type": "flight",
+                          "departure": { "title": "Katowice" },
+                          "destination": { "title": "Antalya" },
+                          "beginDateTime": "2026-06-01T06:00:00Z"
+                        },
+                        {
+                          "type": "hotel",
+                          "content": {
+                            "title": "Amara Family Resort",
+                            "hotelRating": 50
+                          },
+                          "meal": { "id": "AI", "title": "All Inclusive" },
+                          "beginDate": "2026-06-01",
+                          "endDate": "2026-06-08"
+                        },
+                        {
+                          "type": "flight",
+                          "departure": { "title": "Antalya" },
+                          "destination": { "title": "Katowice" },
+                          "beginDateTime": "2026-06-08T20:00:00Z"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "itaka-rate-002",
+                      "price": 519800,
+                      "currency": "PLN",
+                      "participants": [
+                        { "type": "adult", "price": 259900 },
+                        { "type": "adult", "price": 259900 }
+                      ],
+                      "segments": [
+                        {
+                          "type": "flight",
+                          "departure": { "title": "Kraków (KRK)" },
+                          "destination": { "title": "Rodos" },
+                          "beginDateTime": "2026-07-10T07:30:00Z"
+                        },
+                        {
+                          "type": "hotel",
+                          "content": {
+                            "title": "Mitsis Grand Hotel",
+                            "hotelRating": 50
+                          },
+                          "meal": { "id": "UA", "title": "Ultra All Inclusive" },
+                          "beginDate": "2026-07-10",
+                          "endDate": "2026-07-20"
+                        },
+                        {
+                          "type": "flight",
+                          "departure": { "title": "Rodos" },
+                          "destination": { "title": "Kraków" },
+                          "beginDateTime": "2026-07-20T19:00:00Z"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

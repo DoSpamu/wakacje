@@ -1,0 +1,41 @@
+{
+  "offers": [
+    {
+      "id": "exim-001",
+      "hotelName": "Concorde De Luxe Resort",
+      "stars": 5,
+      "location": "Lara",
+      "country": "Turcja",
+      "destinationName": "Turcja - Lara",
+      "departureAirport": "KTW",
+      "departureDate": "2026-06-01",
+      "nights": 7,
+      "boardType": "All Inclusive",
+      "priceTotal": 3299,
+      "pricePerPerson": 1650,
+      "currency": "PLN",
+      "adults": 2,
+      "children": 0,
+      "offerUrl": "https://www.exim.pl/oferta/concorde-de-luxe/12345"
+    },
+    {
+      "id": "exim-002",
+      "hotelName": "Voyage Sorgun",
+      "stars": 5,
+      "location": "Side",
+      "country": "Turcja",
+      "destinationName": "Turcja - Side",
+      "departureAirport": "KRK",
+      "departureDate": "2026-07-15",
+      "nights": 10,
+      "boardType": "Ultra All Inclusive",
+      "priceTotal": 5499,
+      "pricePerPerson": 2750,
+      "currency": "PLN",
+      "adults": 2,
+      "children": 0,
+      "offerUrl": "https://www.exim.pl/oferta/voyage-sorgun/67890"
+    }
+  ],
+  "total": 2
+}

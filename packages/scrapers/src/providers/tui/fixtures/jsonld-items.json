@@ -1,0 +1,20 @@
+[
+  {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "itemListElement": [
+      {
+        "name": "Amara Family Resort",
+        "url": "https://www.tui.pl/wypoczynek/turcja/kemer/amara-family-resort/KTW/OfferCodeWS/KTWJGA20260601060020260601202606080800L07VRN85058APX1AI02?adults=2"
+      },
+      {
+        "name": "Rixos Downtown Antalya",
+        "url": "https://www.tui.pl/wypoczynek/turcja/antalya/rixos-downtown/KTW/OfferCodeWS/KTWANL20260615070020260615202606220700L07HH123456APX1UA02?adults=2"
+      },
+      {
+        "name": "Club Hotel Phaselis Rose",
+        "url": "https://www.tui.pl/wypoczynek/turcja/kemer/club-hotel-phaselis/KRK/OfferCodeWS/KRKJGA20260701080020260701202607120800L11VRN99999APX1HB02?adults=2"
+      }
+    ]
+  }
+]
