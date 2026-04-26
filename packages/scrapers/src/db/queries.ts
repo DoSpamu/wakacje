@@ -434,6 +434,44 @@ export async function getHotelsWithoutMedia(limit = 50): Promise<
 //  Scoring update
 // ─────────────────────────────────────────────
 
+/**
+ * Find hotels whose normalized_name is similar to the given string.
+ * Uses the pg_trgm find_similar_hotels SQL function and the GIN index.
+ */
+export async function findSimilarHotelsByName(
+  normalizedName: string,
+  destinationId: string | null,
+  minSimilarity = 0.4,
+  limit = 5,
+): Promise<ExistingHotelRecord[]> {
+  const { data, error } = await supabase.rpc('find_similar_hotels', {
+    p_normalized_name: normalizedName,
+    p_destination_id: destinationId ?? null,
+    p_min_similarity: minSimilarity,
+    p_limit: limit,
+  });
+
+  if (error) {
+    logger.warn('find_similar_hotels RPC failed', { error: error.message });
+    return [];
+  }
+
+  return (data ?? []).map((row: {
+    id: string;
+    canonical_name: string;
+    normalized_name: string;
+    destination_id: string;
+    stars: number;
+    similarity: number;
+  }) => ({
+    id: row.id,
+    canonicalName: row.canonical_name,
+    normalizedName: row.normalized_name,
+    destinationId: row.destination_id,
+    stars: row.stars,
+  }));
+}
+
 export async function updateOfferScores(
   scores: Array<{ offerId: string; compositeScore: number }>,
 ): Promise<void> {
