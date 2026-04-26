@@ -45,7 +45,7 @@ export interface Offer {
   createdAt: string;
 }
 
-export type ProviderCode = 'rpl' | 'exim' | 'itaka' | 'grecos' | 'tui';
+export type ProviderCode = 'rpl' | 'exim' | 'itaka' | 'grecos' | 'tui' | 'wakacjepl';
 
 export type AirportCode = 'KTW' | 'KRK' | 'WAW' | 'GDN' | 'POZ' | 'WRO' | 'RZE';
 

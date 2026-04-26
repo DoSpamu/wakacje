@@ -22,6 +22,7 @@ import { EximScraper } from './providers/exim/EximScraper.js';
 import { ItakaScraper } from './providers/itaka/ItakaScraper.js';
 import { GrecosScraper } from './providers/grecos/GrecosScraper.js';
 import { TuiScraper } from './providers/tui/TuiScraper.js';
+import { WakacjePlScraper } from './providers/wakacjepl/WakacjePlScraper.js';
 import { TripAdvisorEnricher } from './enrichment/TripAdvisorEnricher.js';
 import { YouTubeEnricher } from './enrichment/YouTubeEnricher.js';
 import { normalizeOffer, inferCanonicalDestination } from './normalizer/OfferNormalizer.js';
@@ -108,6 +109,7 @@ const PROVIDER_SCRAPERS = {
   itaka: ItakaScraper,
   grecos: GrecosScraper,
   tui: TuiScraper,
+  wakacjepl: WakacjePlScraper,
 } as const;
 
 export type SupportedProvider = keyof typeof PROVIDER_SCRAPERS;

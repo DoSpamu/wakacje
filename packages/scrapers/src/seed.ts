@@ -25,6 +25,7 @@ const PROVIDERS = [
   { code: 'itaka', name: 'Itaka', base_url: 'https://www.itaka.pl', is_active: true },
   { code: 'grecos', name: 'Grecos Holiday', base_url: 'https://www.grecos.pl', is_active: true },
   { code: 'tui', name: 'TUI Poland', base_url: 'https://www.tui.pl', is_active: true },
+  { code: 'wakacjepl', name: 'Wakacje.pl', base_url: 'https://www.wakacje.pl', is_active: true },
 ];
 
 const DESTINATIONS = [

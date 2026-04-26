@@ -5,7 +5,7 @@ export const OfferSchema = z.object({
   id: z.string().uuid(),
   searchRunId: z.string().uuid(),
   providerId: z.string().uuid(),
-  providerCode: z.enum(['rpl', 'exim', 'itaka', 'grecos', 'tui']),
+  providerCode: z.enum(['rpl', 'exim', 'itaka', 'grecos', 'tui', 'wakacjepl']),
   hotelId: z.string().uuid().optional(),
   providerOfferId: z.string().optional(),
   destinationId: z.string().uuid().optional(),
@@ -36,7 +36,7 @@ export type OfferInput = z.input<typeof OfferSchema>;
 
 /** Raw offer data before normalization — scrapers produce this */
 export const RawOfferSchema = z.object({
-  providerCode: z.enum(['rpl', 'exim', 'itaka', 'grecos', 'tui']),
+  providerCode: z.enum(['rpl', 'exim', 'itaka', 'grecos', 'tui', 'wakacjepl']),
   providerOfferId: z.string().optional(),
   hotelName: z.string(),
   hotelStars: z.number().int().min(1).max(5),

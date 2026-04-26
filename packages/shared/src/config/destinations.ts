@@ -1,5 +1,10 @@
 ﻿import type { CanonicalDestination } from '../types/filter.js';
 
+export interface WakacjePlDestinationMapping {
+  /** URL slug used in https://www.wakacje.pl/wczasy/{slug}/ */
+  slug: string;
+}
+
 export interface DestinationInfo {
   canonical: CanonicalDestination;
   displayNamePl: string;
@@ -8,10 +13,10 @@ export interface DestinationInfo {
   providers: {
     rpl?: RplDestinationMapping;
     exim?: EximDestinationMapping;
-
     itaka?: ItakaDestinationMapping;
     grecos?: GrecosDestinationMapping;
     tui?: TuiDestinationMapping;
+    wakacjepl?: WakacjePlDestinationMapping;
   };
 }
 
@@ -68,6 +73,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'turcja', displayName: 'Turcja' },
       grecos: { slug: 'turcja', displayName: 'Turcja' },
       tui: { code: 'turkey', displayName: 'Turcja' },
+      wakacjepl: { slug: 'turcja' },
     },
   },
   egypt: {
@@ -81,6 +87,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'egipt', displayName: 'Egipt' },
       grecos: { slug: 'egipt', displayName: 'Egipt' },
       tui: { code: 'egypt', displayName: 'Egipt' },
+      wakacjepl: { slug: 'egipt' },
     },
   },
   greece: {
@@ -94,6 +101,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'grecja', displayName: 'Grecja' },
       grecos: { slug: 'grecja', displayName: 'Grecja' },
       tui: { code: 'greece', displayName: 'Grecja' },
+      wakacjepl: { slug: 'grecja' },
     },
   },
   spain: {
@@ -107,6 +115,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'hiszpania', displayName: 'Hiszpania' },
       grecos: { slug: 'hiszpania', displayName: 'Hiszpania' },
       tui: { code: 'spain', displayName: 'Hiszpania' },
+      wakacjepl: { slug: 'hiszpania' },
     },
   },
   cyprus: {
@@ -120,6 +129,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'cypr', displayName: 'Cypr' },
       grecos: { slug: 'cypr', displayName: 'Cypr' },
       tui: { code: 'cyprus', displayName: 'Cypr' },
+      wakacjepl: { slug: 'cypr' },
     },
   },
   tunisia: {
@@ -132,6 +142,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'tunezja', displayName: 'Tunezja' },
       grecos: { slug: 'tunezja', displayName: 'Tunezja' },
       tui: { code: 'tunisia', displayName: 'Tunezja' },
+      wakacjepl: { slug: 'tunezja' },
     },
   },
   bulgaria: {
@@ -144,6 +155,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'bulgaria', displayName: 'BuĹ‚garia' },
       grecos: { slug: 'bulgaria', displayName: 'BuĹ‚garia' },
       tui: { code: 'bulgaria', displayName: 'BuĹ‚garia' },
+      wakacjepl: { slug: 'bulgaria' },
     },
   },
   croatia: {
@@ -156,6 +168,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'chorwacja', displayName: 'Chorwacja' },
       grecos: { slug: 'chorwacja', displayName: 'Chorwacja' },
       tui: { code: 'croatia', displayName: 'Chorwacja' },
+      wakacjepl: { slug: 'chorwacja' },
     },
   },
   malta: {
@@ -168,6 +181,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'malta', displayName: 'Malta' },
       grecos: { slug: 'malta', displayName: 'Malta' },
       tui: { code: 'malta', displayName: 'Malta' },
+      wakacjepl: { slug: 'malta' },
     },
   },
   'canary-islands': {
@@ -180,6 +194,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'wyspy-kanaryjskie', displayName: 'Wyspy Kanaryjskie' },
       grecos: { slug: 'wyspy-kanaryjskie', displayName: 'Wyspy Kanaryjskie' },
       tui: { code: 'canary-islands', displayName: 'Wyspy Kanaryjskie' },
+      wakacjepl: { slug: 'wyspy-kanaryjskie' },
     },
   },
   portugal: {
@@ -192,6 +207,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'portugalia', displayName: 'Portugalia' },
       grecos: { slug: 'portugalia', displayName: 'Portugalia' },
       tui: { code: 'portugal', displayName: 'Portugalia' },
+      wakacjepl: { slug: 'portugalia' },
     },
   },
   morocco: {
@@ -204,6 +220,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'maroko', displayName: 'Maroko' },
       grecos: { slug: 'maroko', displayName: 'Maroko' },
       tui: { code: 'morocco', displayName: 'Maroko' },
+      wakacjepl: { slug: 'maroko' },
     },
   },
   albania: {
@@ -216,6 +233,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'albania', displayName: 'Albania' },
       grecos: { slug: 'albania', displayName: 'Albania' },
       tui: { code: 'albania', displayName: 'Albania' },
+      wakacjepl: { slug: 'albania' },
     },
   },
   montenegro: {
@@ -228,6 +246,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
       itaka: { slug: 'czarnogora', displayName: 'CzarnogĂłra' },
       grecos: { slug: 'czarnogora', displayName: 'CzarnogĂłra' },
       tui: { code: 'montenegro', displayName: 'CzarnogĂłra' },
+      wakacjepl: { slug: 'czarnogora' },
     },
   },
 };
