@@ -4,8 +4,6 @@ import { Resend } from 'resend';
 
 export const runtime = 'nodejs';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 interface Alert {
   id: string;
   email: string;
@@ -22,6 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const supabase = createServerClient();
 
   // Fetch all alerts with hotel names

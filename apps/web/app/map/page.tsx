@@ -1,9 +1,11 @@
-import dynamic from 'next/dynamic';
+import loadDynamic from 'next/dynamic';
 import { createServerClient } from '@/lib/supabase';
 import type { DestinationSummary } from '@/app/api/map/route';
 
+export const dynamic = 'force-dynamic';
+
 // SSR must be disabled — Leaflet uses window/document at module load time
-const DestinationMap = dynamic(() => import('@/components/DestinationMap'), { ssr: false });
+const DestinationMap = loadDynamic(() => import('@/components/DestinationMap'), { ssr: false });
 
 const DESTINATION_META: Record<string, { label: string; lat: number; lng: number }> = {
   turkey:           { label: 'Turcja',             lat: 37.0,  lng: 35.3  },
