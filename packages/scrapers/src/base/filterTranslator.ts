@@ -157,26 +157,26 @@ export function translateToExim(filter: SearchFilter): EximSearchParams[] {
 
   const params = new URLSearchParams();
 
-  // Fixed params required by Exim's search engine (discovered 2026-04-10)
-  params.set('ds', '0');
-  params.set('tt', '1');           // transport type: 1 = air
-  params.set('er', '0');
+  // Exim requires uppercase parameter names (verified 2026-04-27 from live site)
+  params.set('DS', '0');
+  params.set('TT', '0');           // 0 = all transport incl. air
+  params.set('ER', '0');
 
-  // Destinations — pipe-separated IDs (d= param, not the old to=)
-  params.set('d', destinationIds.join('|'));
+  // Destinations — pipe-separated IDs
+  params.set('D', destinationIds.join('|'));
 
   // Departure date from
-  params.set('dd', filter.departureDateFrom);
+  params.set('DD', filter.departureDateFrom);
 
   // Return date (end of search window)
-  params.set('rd', filter.departureDateTo);
+  params.set('RD', filter.departureDateTo);
 
-  // Nights — pipe-separated list
+  // Nights — pipe-separated list of individual values
   const nightsList: number[] = [];
   for (let n = filter.nights.min; n <= filter.nights.max; n++) {
     nightsList.push(n);
   }
-  params.set('nn', nightsList.join('|'));
+  params.set('NN', nightsList.join('|'));
 
   // Meal/board type (m= numeric code)
   const mealCodes = filter.boardTypes

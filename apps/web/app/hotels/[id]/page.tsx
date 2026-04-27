@@ -204,7 +204,7 @@ export default async function HotelPage({ params }: Props) {
               <span className="stars text-lg">{stars(hotel.stars)}</span>
               <span className="text-sm text-slate-500">
                 {hotel.location_city}{hotel.location_region ? `, ${hotel.location_region}` : ''}
-                {dest && ` — ${dest.display_name}`}
+                {dest && dest.display_name !== hotel.location_region && ` — ${dest.display_name}`}
               </span>
               {priceDrop && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
@@ -493,8 +493,8 @@ export default async function HotelPage({ params }: Props) {
                 href={`/hotels/${sh.id}`}
                 className="card overflow-hidden hover:shadow-md transition-shadow block"
               >
-                <div className="h-28 bg-gradient-to-br from-blue-50 to-slate-200 relative">
-                  {sh.photoUrl && (
+                <div className="h-28 bg-gradient-to-br from-blue-50 to-slate-200 relative flex items-center justify-center">
+                  {sh.photoUrl ? (
                     <Image
                       src={sh.photoUrl}
                       alt={sh.name}
@@ -502,6 +502,8 @@ export default async function HotelPage({ params }: Props) {
                       sizes="(max-width: 768px) 50vw, 17vw"
                       className="object-cover"
                     />
+                  ) : (
+                    <span className="text-3xl opacity-30">🏨</span>
                   )}
                   {sh.score !== null && (
                     <div className={`absolute top-1 right-1 ${getScoreClass(sh.score)} text-xs shadow-sm`}>

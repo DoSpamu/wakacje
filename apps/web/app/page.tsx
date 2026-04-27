@@ -272,7 +272,7 @@ export default function HomePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Szukaj ofert wakacyjnych</h1>
           <p className="text-sm text-slate-500 mt-1">
-            All-Inclusive z R.pl, Exim Tours, Itaka, Grecos i TUI
+            All-Inclusive z R.pl, Exim Tours, Itaka, Grecos, TUI i Wakacje.pl
           </p>
         </div>
         <div className="flex items-center gap-2">

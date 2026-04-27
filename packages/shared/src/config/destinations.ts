@@ -1,4 +1,4 @@
-﻿import type { CanonicalDestination } from '../types/filter.js';
+import type { CanonicalDestination } from '../types/filter.js';
 
 export interface WakacjePlDestinationMapping {
   /** URL slug used in https://www.wakacje.pl/wczasy/{slug}/ */
@@ -48,7 +48,7 @@ export interface RplDestinationMapping {
 }
 
 export interface EximDestinationMapping {
-  /** Numeric destination IDs for Exim (to=ID1|ID2) */
+  /** Numeric destination IDs for Exim D= parameter */
   ids: number[];
   displayName: string;
 }
@@ -56,10 +56,8 @@ export interface EximDestinationMapping {
 
 /**
  * Master destination dictionary.
- * Each canonical destination maps to provider-specific identifiers.
- *
- * IMPORTANT: Verify Exim IDs against current Exim search UI before production use.
- * IDs can change with site redesigns. Run: node packages/scrapers/src/tools/discover-exim-ids.ts
+ * Exim IDs verified 2026-04-27 from live /kierunki/{slug} pages.
+ * Exim uses uppercase D= parameter with country-level IDs.
  */
 export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
   turkey: {
@@ -68,7 +66,6 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'TR',
     providers: {
       rpl: { kraj: 'turcja', displayName: 'Turcja' },
-      // Exim IDs discovered 2026-04-10 from /kierunki/turcja (Antalya/Turkish Riviera)
       exim: { ids: [63288, 63448, 64157], displayName: 'Turcja' },
       itaka: { slug: 'turcja', displayName: 'Turcja' },
       grecos: { slug: 'turcja', displayName: 'Turcja' },
@@ -82,8 +79,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'EG',
     providers: {
       rpl: { kraj: 'egipt', displayName: 'Egipt' },
-      // Exim IDs discovered 2026-04-10 from /all-inclusive page
-      exim: { ids: [64419, 64420, 64425], displayName: 'Egipt' },
+      exim: { ids: [424694], displayName: 'Egipt' },
       itaka: { slug: 'egipt', displayName: 'Egipt' },
       grecos: { slug: 'egipt', displayName: 'Egipt' },
       tui: { code: 'egypt', displayName: 'Egipt' },
@@ -96,8 +92,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'GR',
     providers: {
       rpl: { kraj: 'grecja', displayName: 'Grecja' },
-      // Exim IDs discovered 2026-04-10 from /all-inclusive page
-      exim: { ids: [63220, 63281, 63316, 63324, 63402], displayName: 'Grecja' },
+      exim: { ids: [425856], displayName: 'Grecja' },
       itaka: { slug: 'grecja', displayName: 'Grecja' },
       grecos: { slug: 'grecja', displayName: 'Grecja' },
       tui: { code: 'greece', displayName: 'Grecja' },
@@ -110,8 +105,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'ES',
     providers: {
       rpl: { kraj: 'hiszpania', displayName: 'Hiszpania' },
-      // Exim IDs discovered 2026-04-10 from /all-inclusive page (incl. Canary Islands)
-      exim: { ids: [63213, 63241, 63242, 63243, 63245, 63284, 63350, 74459, 74460, 74465], displayName: 'Hiszpania' },
+      exim: { ids: [446967], displayName: 'Hiszpania' },
       itaka: { slug: 'hiszpania', displayName: 'Hiszpania' },
       grecos: { slug: 'hiszpania', displayName: 'Hiszpania' },
       tui: { code: 'spain', displayName: 'Hiszpania' },
@@ -124,8 +118,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'CY',
     providers: {
       rpl: { kraj: 'cypr', displayName: 'Cypr' },
-      // Exim IDs discovered 2026-04-10 from /all-inclusive page
-      exim: { ids: [63540, 63541, 63542], displayName: 'Cypr' },
+      exim: { ids: [421341], displayName: 'Cypr' },
       itaka: { slug: 'cypr', displayName: 'Cypr' },
       grecos: { slug: 'cypr', displayName: 'Cypr' },
       tui: { code: 'cyprus', displayName: 'Cypr' },
@@ -138,7 +131,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'TN',
     providers: {
       rpl: { kraj: 'tunezja', displayName: 'Tunezja' },
-      exim: { ids: [1501, 1502, 1503], displayName: 'Tunezja' },
+      exim: { ids: [421609], displayName: 'Tunezja' },
       itaka: { slug: 'tunezja', displayName: 'Tunezja' },
       grecos: { slug: 'tunezja', displayName: 'Tunezja' },
       tui: { code: 'tunisia', displayName: 'Tunezja' },
@@ -147,14 +140,14 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
   },
   bulgaria: {
     canonical: 'bulgaria',
-    displayNamePl: 'BuĹ‚garia',
+    displayNamePl: 'Bułgaria',
     countryCode: 'BG',
     providers: {
-      rpl: { kraj: 'bulgaria', displayName: 'BuĹ‚garia' },
-      exim: { ids: [1401, 1402], displayName: 'BuĹ‚garia' },
-      itaka: { slug: 'bulgaria', displayName: 'BuĹ‚garia' },
-      grecos: { slug: 'bulgaria', displayName: 'BuĹ‚garia' },
-      tui: { code: 'bulgaria', displayName: 'BuĹ‚garia' },
+      rpl: { kraj: 'bulgaria', displayName: 'Bułgaria' },
+      exim: { ids: [421022], displayName: 'Bułgaria' },
+      itaka: { slug: 'bulgaria', displayName: 'Bułgaria' },
+      grecos: { slug: 'bulgaria', displayName: 'Bułgaria' },
+      tui: { code: 'bulgaria', displayName: 'Bułgaria' },
       wakacjepl: { slug: 'bulgaria' },
     },
   },
@@ -164,7 +157,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'HR',
     providers: {
       rpl: { kraj: 'chorwacja', displayName: 'Chorwacja' },
-      exim: { ids: [1301, 1302, 1303], displayName: 'Chorwacja' },
+      exim: { ids: [421468], displayName: 'Chorwacja' },
       itaka: { slug: 'chorwacja', displayName: 'Chorwacja' },
       grecos: { slug: 'chorwacja', displayName: 'Chorwacja' },
       tui: { code: 'croatia', displayName: 'Chorwacja' },
@@ -177,7 +170,6 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'MT',
     providers: {
       rpl: { kraj: 'malta', displayName: 'Malta' },
-      exim: { ids: [1201], displayName: 'Malta' },
       itaka: { slug: 'malta', displayName: 'Malta' },
       grecos: { slug: 'malta', displayName: 'Malta' },
       tui: { code: 'malta', displayName: 'Malta' },
@@ -190,7 +182,6 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'ES',
     providers: {
       rpl: { kraj: 'wyspy-kanaryjskie', displayName: 'Wyspy Kanaryjskie' },
-      exim: { ids: [1101, 1102, 1103, 1104], displayName: 'Wyspy Kanaryjskie' },
       itaka: { slug: 'wyspy-kanaryjskie', displayName: 'Wyspy Kanaryjskie' },
       grecos: { slug: 'wyspy-kanaryjskie', displayName: 'Wyspy Kanaryjskie' },
       tui: { code: 'canary-islands', displayName: 'Wyspy Kanaryjskie' },
@@ -203,7 +194,6 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'PT',
     providers: {
       rpl: { kraj: 'portugalia', displayName: 'Portugalia' },
-      exim: { ids: [1001, 1002], displayName: 'Portugalia' },
       itaka: { slug: 'portugalia', displayName: 'Portugalia' },
       grecos: { slug: 'portugalia', displayName: 'Portugalia' },
       tui: { code: 'portugal', displayName: 'Portugalia' },
@@ -216,7 +206,7 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'MA',
     providers: {
       rpl: { kraj: 'maroko', displayName: 'Maroko' },
-      exim: { ids: [901, 902], displayName: 'Maroko' },
+      exim: { ids: [423882], displayName: 'Maroko' },
       itaka: { slug: 'maroko', displayName: 'Maroko' },
       grecos: { slug: 'maroko', displayName: 'Maroko' },
       tui: { code: 'morocco', displayName: 'Maroko' },
@@ -229,7 +219,6 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
     countryCode: 'AL',
     providers: {
       rpl: { kraj: 'albania', displayName: 'Albania' },
-      exim: { ids: [801], displayName: 'Albania' },
       itaka: { slug: 'albania', displayName: 'Albania' },
       grecos: { slug: 'albania', displayName: 'Albania' },
       tui: { code: 'albania', displayName: 'Albania' },
@@ -238,14 +227,14 @@ export const DESTINATIONS: Record<CanonicalDestination, DestinationInfo> = {
   },
   montenegro: {
     canonical: 'montenegro',
-    displayNamePl: 'CzarnogĂłra',
+    displayNamePl: 'Czarnogóra',
     countryCode: 'ME',
     providers: {
-      rpl: { kraj: 'czarnogora', displayName: 'CzarnogĂłra' },
-      exim: { ids: [701, 702], displayName: 'CzarnogĂłra' },
-      itaka: { slug: 'czarnogora', displayName: 'CzarnogĂłra' },
-      grecos: { slug: 'czarnogora', displayName: 'CzarnogĂłra' },
-      tui: { code: 'montenegro', displayName: 'CzarnogĂłra' },
+      rpl: { kraj: 'czarnogora', displayName: 'Czarnogóra' },
+      exim: { ids: [63487], displayName: 'Czarnogóra' },
+      itaka: { slug: 'czarnogora', displayName: 'Czarnogóra' },
+      grecos: { slug: 'czarnogora', displayName: 'Czarnogóra' },
+      tui: { code: 'montenegro', displayName: 'Czarnogóra' },
       wakacjepl: { slug: 'czarnogora' },
     },
   },
