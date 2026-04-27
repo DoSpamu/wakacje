@@ -46,6 +46,7 @@ const PROVIDERS = [
   { value: 'itaka', label: 'Itaka' },
   { value: 'grecos', label: 'Grecos' },
   { value: 'tui', label: 'TUI' },
+  { value: 'wakacjepl', label: 'Wakacje.pl' },
 ];
 
 interface Props {

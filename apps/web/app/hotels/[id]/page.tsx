@@ -27,8 +27,10 @@ export default async function HotelPage({ params }: Props) {
 
   if (!hotel) notFound();
 
-  // Photos, offers, and price history fetched in parallel
-  const [{ data: photosData }, { data: offers }, { data: priceRaw }] = await Promise.all([
+  const destCanonical = (hotel.destinations as { canonical_name: string } | null)?.canonical_name ?? '';
+
+  // Photos, offers, price history, and similar hotels fetched in parallel
+  const [{ data: photosData }, { data: offers }, { data: priceRaw }, { data: similarRaw }] = await Promise.all([
     supabase
       .from('hotel_photos')
       .select('url, caption')
@@ -48,6 +50,17 @@ export default async function HotelPage({ params }: Props) {
       .eq('hotel_id', params.id)
       .order('scraped_at', { ascending: true })
       .limit(500),
+    destCanonical
+      ? supabase
+          .from('offers_enriched')
+          .select('hotel_id, hotel_canonical_name, hotel_stars, hotel_photo_url, price_total, tripadvisor_rating, composite_score')
+          .eq('destination_canonical', destCanonical)
+          .eq('is_available', true)
+          .neq('hotel_id', params.id)
+          .not('hotel_id', 'is', null)
+          .order('composite_score', { ascending: false, nullsFirst: false })
+          .limit(80)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
   ]);
 
   // Aggregate min price per calendar day
@@ -95,6 +108,28 @@ export default async function HotelPage({ params }: Props) {
   const h = hotel as Record<string, unknown>;
   const youtubeVideoId = h['youtube_video_id'] as string | null | undefined;
   const photos = photosData ?? [];
+
+  // Deduplicate similar hotels by hotel_id, take top 6
+  interface SimilarHotel { id: string; name: string; hotelStars: number; photoUrl: string | null; rating: number | null; score: number | null; minPrice: number }
+  const similarMap = new Map<string, SimilarHotel>();
+  for (const row of (similarRaw ?? []) as Record<string, unknown>[]) {
+    const hid = String(row['hotel_id']);
+    if (similarMap.has(hid)) {
+      const ex = similarMap.get(hid)!;
+      if ((row['price_total'] as number) < ex.minPrice) ex.minPrice = row['price_total'] as number;
+    } else if (similarMap.size < 6) {
+      similarMap.set(hid, {
+        id: hid,
+        name: (row['hotel_canonical_name'] as string) ?? hid,
+        hotelStars: (row['hotel_stars'] as number) ?? 0,
+        photoUrl: (row['hotel_photo_url'] as string | null) ?? null,
+        rating: (row['tripadvisor_rating'] as number | null) ?? null,
+        score: (row['composite_score'] as number | null) ?? null,
+        minPrice: row['price_total'] as number,
+      });
+    }
+  }
+  const similarHotels = [...similarMap.values()];
 
   // Group offers by provider
   const offersByProvider = (offers ?? []).reduce<Record<string, typeof offers>>((acc, o) => {
@@ -443,6 +478,55 @@ export default async function HotelPage({ params }: Props) {
           </div>
         )}
       </div>
+
+      {/* Similar hotels in the same destination */}
+      {similarHotels.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800 mb-4">
+            Podobne hotele — {dest?.display_name}
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {similarHotels.map((sh) => (
+              <a
+                key={sh.id}
+                href={`/hotels/${sh.id}`}
+                className="card overflow-hidden hover:shadow-md transition-shadow block"
+              >
+                <div className="h-28 bg-gradient-to-br from-blue-50 to-slate-200 relative">
+                  {sh.photoUrl && (
+                    <Image
+                      src={sh.photoUrl}
+                      alt={sh.name}
+                      fill
+                      sizes="(max-width: 768px) 50vw, 17vw"
+                      className="object-cover"
+                    />
+                  )}
+                  {sh.score !== null && (
+                    <div className={`absolute top-1 right-1 ${getScoreClass(sh.score)} text-xs shadow-sm`}>
+                      {sh.score}
+                    </div>
+                  )}
+                </div>
+                <div className="p-2">
+                  <div className="font-medium text-slate-800 text-xs leading-tight line-clamp-2">
+                    {sh.name}
+                  </div>
+                  <div className="stars text-xs mt-0.5">{stars(sh.hotelStars)}</div>
+                  {sh.rating !== null && (
+                    <div className="text-xs text-amber-600 mt-0.5">
+                      ★ {formatRating(sh.rating)}
+                    </div>
+                  )}
+                  <div className="text-sm font-bold text-slate-900 mt-1">
+                    od {sh.minPrice.toLocaleString('pl-PL')} zł
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
