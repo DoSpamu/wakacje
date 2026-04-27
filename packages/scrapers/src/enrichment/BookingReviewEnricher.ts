@@ -53,6 +53,8 @@ export class BookingReviewEnricher {
     });
     await this.context.route('**/*.{png,jpg,jpeg,gif,webp,ico,svg,woff,woff2}', (r) => r.abort());
     await this.context.route('**/{ads,analytics,sentry,tracking}**', (r) => r.abort());
+    // tsx/esbuild injects __name() helper — define it in browser context so page.evaluate doesn't crash
+    await this.context.addInitScript('window.__name = function(fn) { return fn; }');
   }
 
   async close(): Promise<void> {
@@ -142,12 +144,12 @@ export class BookingReviewEnricher {
 
   private async findHotelUrl(page: Page, hotelName: string): Promise<string | null> {
     return page.evaluate((name: string): string | null => {
-      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const target = norm(name.slice(0, 20));
+      // Inline normalization — avoid named arrow assignment (prevents esbuild __name injection)
+      const target = name.slice(0, 20).toLowerCase().replace(/[^a-z0-9]/g, '');
       const cards = Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-testid="property-card"] a[href*="/hotel/"], a[href*="booking.com/hotel/"]'));
       for (const card of cards) {
-        const title = card.querySelector('[data-testid="title"]')?.textContent ?? card.textContent ?? '';
-        if (norm(title).includes(target.slice(0, 10))) return card.href;
+        const title = (card.querySelector('[data-testid="title"]')?.textContent ?? card.textContent ?? '');
+        if (title.toLowerCase().replace(/[^a-z0-9]/g, '').includes(target.slice(0, 10))) return card.href;
       }
       return document.querySelector<HTMLAnchorElement>('[data-testid="property-card"] a[href*="/hotel/"]')?.href ?? null;
     }, hotelName);

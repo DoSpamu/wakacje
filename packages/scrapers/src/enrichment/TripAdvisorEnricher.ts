@@ -60,6 +60,8 @@ export class TripAdvisorEnricher {
       (route) => route.abort(),
     );
     await this.context.route('**/{ads,analytics,tracking}**', (route) => route.abort());
+    // tsx/esbuild injects __name() helper — define it in browser context so page.evaluate doesn't crash
+    await this.context.addInitScript('window.__name = function(fn) { return fn; }');
   }
 
   async close(): Promise<void> {
@@ -103,8 +105,8 @@ export class TripAdvisorEnricher {
   ): Promise<{ data: Omit<HotelReviewSummary, 'id' | 'hotelId' | 'createdAt'>; photos: string[] } | null> {
     if (!this.context) throw new Error('Enricher not initialized');
 
-    // Strategy 1: TypeAhead JSON API — plain fetch, bypasses TA search page bot detection
-    let hotelUrl = await this.findHotelUrlViaTypeAhead(hotelName, location);
+    // Strategy 1: DuckDuckGo search — plain HTTP fetch, returns TA Hotel_Review links without bot detection
+    let hotelUrl = await this.findHotelUrlViaSearch(hotelName, location);
 
     // Strategy 2: Fall back to loading the search page in a real browser
     if (!hotelUrl) {
@@ -150,32 +152,40 @@ export class TripAdvisorEnricher {
     }
   }
 
-  private async findHotelUrlViaTypeAhead(hotelName: string, location: string): Promise<string | null> {
-    for (const query of [`${hotelName} ${location}`, hotelName]) {
+  private async findHotelUrlViaSearch(hotelName: string, location: string): Promise<string | null> {
+    // DuckDuckGo HTML search — plain HTTP, no bot detection, returns TA links in href attributes
+    for (const query of [
+      `site:tripadvisor.com/Hotel_Review ${hotelName} ${location}`,
+      `site:tripadvisor.com/Hotel_Review ${hotelName}`,
+    ]) {
       try {
-        const res = await fetch(
-          `https://www.tripadvisor.com/TypeAheadJson?query=${encodeURIComponent(query)}&lang=pl&typeaheadv2=true&searchNearby=false&expand=Hotels`,
+        const ddgRes = await globalThis.fetch(
+          `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
           {
+            method: 'POST',
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-              Accept: 'application/json, text/javascript, */*; q=0.01',
-              'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8',
-              Referer: 'https://www.tripadvisor.com/',
+              'Content-Type': 'application/x-www-form-urlencoded',
+              Accept: 'text/html',
             },
-            signal: AbortSignal.timeout(8_000),
+            body: `q=${encodeURIComponent(query)}&kl=pl-pl`,
+            signal: AbortSignal.timeout(10_000),
           },
         );
-        if (!res.ok) continue;
-        const data = await res.json() as { results?: Array<{ url?: string; detailType?: string }> };
-        const match = (data.results ?? []).find(
-          (r) => r.url?.includes('/Hotel_Review') || r.detailType === 'HOTEL',
-        );
-        if (match?.url) {
-          logger.debug(`TypeAhead found hotel URL for "${hotelName}": ${match.url}`);
-          return match.url;
+        if (!ddgRes.ok) continue;
+        const html = await ddgRes.text();
+        const fullMatch = /https?:\/\/(?:www\.)?tripadvisor\.com\/Hotel_Review[A-Za-z0-9_\-.]+/.exec(html);
+        if (fullMatch) {
+          logger.debug(`DDG found TA URL for "${hotelName}": ${fullMatch[0]}`);
+          return fullMatch[0];
+        }
+        const relMatch = /\/Hotel_Review[A-Za-z0-9_\-.]+/.exec(html);
+        if (relMatch) {
+          logger.debug(`DDG found relative TA URL for "${hotelName}": ${relMatch[0]}`);
+          return relMatch[0];
         }
       } catch (err) {
-        logger.debug(`TypeAhead lookup failed for "${query}": ${String(err)}`);
+        logger.debug(`DDG search failed for "${query}": ${String(err)}`);
       }
     }
     return null;
