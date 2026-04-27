@@ -810,6 +810,38 @@ function HotelList({ groups, trends }: { groups: HotelGroup[]; trends?: Record<s
                     </a>
                   ))}
               </div>
+
+              {/* Review summary — inline, always visible when data present */}
+              {(group.taRating !== null || (group.taTags && group.taTags.length > 0)) && (
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs">
+                  {group.taRating !== null && (
+                    <span className="text-amber-600 font-semibold">
+                      ★ {formatRating(group.taRating)}
+                      {group.taReviews ? (
+                        <span className="text-slate-400 font-normal ml-0.5 text-[11px]">
+                          {' '}({group.taReviews >= 1000
+                            ? `${(group.taReviews / 1000).toFixed(1)}k`
+                            : group.taReviews} opinii)
+                        </span>
+                      ) : null}
+                    </span>
+                  )}
+                  {group.taFoodScore !== null && (
+                    <span className={`rounded px-1.5 py-0.5 ${
+                      (group.taFoodScore ?? 0) >= 4.5 ? 'bg-green-50 text-green-700'
+                      : (group.taFoodScore ?? 0) >= 4.0 ? 'bg-lime-50 text-lime-700'
+                      : 'bg-amber-50 text-amber-700'
+                    }`}>
+                      🍽 {formatRating(group.taFoodScore)}
+                    </span>
+                  )}
+                  {group.taTags?.slice(0, 3).map((tag) => (
+                    <span key={tag} className="bg-slate-100 text-slate-500 rounded px-1.5 py-0.5">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Price column */}

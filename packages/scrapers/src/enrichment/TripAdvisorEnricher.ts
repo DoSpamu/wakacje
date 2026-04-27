@@ -103,30 +103,38 @@ export class TripAdvisorEnricher {
   ): Promise<{ data: Omit<HotelReviewSummary, 'id' | 'hotelId' | 'createdAt'>; photos: string[] } | null> {
     if (!this.context) throw new Error('Enricher not initialized');
 
-    const page = await this.context.newPage();
+    // Strategy 1: TypeAhead JSON API — plain fetch, bypasses TA search page bot detection
+    let hotelUrl = await this.findHotelUrlViaTypeAhead(hotelName, location);
 
-    try {
-      const q = encodeURIComponent(`${hotelName} ${location} hotel`);
-      await page.goto(`https://www.tripadvisor.com/Search?q=${q}&lang=pl`, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30_000,
-      });
-      await jitteredDelay(2500, 1000);
-      await this.dismissCookies(page);
-
-      const hotelUrl = await this.findHotelUrl(page, hotelName);
-      if (!hotelUrl) {
-        logger.warn(`No TripAdvisor result for "${hotelName}"`);
-        return null;
+    // Strategy 2: Fall back to loading the search page in a real browser
+    if (!hotelUrl) {
+      const searchPage = await this.context.newPage();
+      try {
+        const q = encodeURIComponent(`${hotelName} ${location} hotel`);
+        await searchPage.goto(`https://www.tripadvisor.com/Search?q=${q}&lang=pl`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30_000,
+        });
+        await jitteredDelay(2500, 1000);
+        await this.dismissCookies(searchPage);
+        hotelUrl = await this.findHotelUrlFromPage(searchPage);
+      } finally {
+        await searchPage.close();
       }
+    }
 
-      const fullUrl = hotelUrl.startsWith('http')
-        ? hotelUrl
-        : `https://www.tripadvisor.com${hotelUrl}`;
-      const plUrl = fullUrl.includes('?')
-        ? `${fullUrl}&lang=pl`
-        : `${fullUrl}?lang=pl`;
+    if (!hotelUrl) {
+      logger.warn(`No TripAdvisor result for "${hotelName}"`);
+      return null;
+    }
 
+    const fullUrl = hotelUrl.startsWith('http')
+      ? hotelUrl
+      : `https://www.tripadvisor.com${hotelUrl}`;
+    const plUrl = fullUrl.includes('?') ? `${fullUrl}&lang=pl` : `${fullUrl}?lang=pl`;
+
+    const page = await this.context.newPage();
+    try {
       await this.rateLimiter.acquire();
       await page.goto(plUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await jitteredDelay(2500, 1000);
@@ -140,6 +148,37 @@ export class TripAdvisorEnricher {
     } finally {
       await page.close();
     }
+  }
+
+  private async findHotelUrlViaTypeAhead(hotelName: string, location: string): Promise<string | null> {
+    for (const query of [`${hotelName} ${location}`, hotelName]) {
+      try {
+        const res = await fetch(
+          `https://www.tripadvisor.com/TypeAheadJson?query=${encodeURIComponent(query)}&lang=pl&typeaheadv2=true&searchNearby=false&expand=Hotels`,
+          {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              Accept: 'application/json, text/javascript, */*; q=0.01',
+              'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8',
+              Referer: 'https://www.tripadvisor.com/',
+            },
+            signal: AbortSignal.timeout(8_000),
+          },
+        );
+        if (!res.ok) continue;
+        const data = await res.json() as { results?: Array<{ url?: string; detailType?: string }> };
+        const match = (data.results ?? []).find(
+          (r) => r.url?.includes('/Hotel_Review') || r.detailType === 'HOTEL',
+        );
+        if (match?.url) {
+          logger.debug(`TypeAhead found hotel URL for "${hotelName}": ${match.url}`);
+          return match.url;
+        }
+      } catch (err) {
+        logger.debug(`TypeAhead lookup failed for "${query}": ${String(err)}`);
+      }
+    }
+    return null;
   }
 
   private async dismissCookies(page: Page): Promise<void> {
@@ -162,7 +201,7 @@ export class TripAdvisorEnricher {
     }
   }
 
-  private async findHotelUrl(page: Page, _hotelName: string): Promise<string | null> {
+  private async findHotelUrlFromPage(page: Page): Promise<string | null> {
     const selectors = [
       'a[href*="/Hotel_Review"]',
       '[data-automation="SearchResultCard"] a[href*="Hotel"]',

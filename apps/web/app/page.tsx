@@ -160,7 +160,7 @@ export default function HomePage() {
     [],
   );
 
-  // Read filter from URL on mount (enables shareable links + map "Pokaz" links)
+  // Read filter from URL on mount, then kick off DB fetch + live search simultaneously
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const fromUrl = parseFilterFromUrl(sp);
@@ -169,6 +169,7 @@ export default function HomePage() {
       : DEFAULT_FILTER;
     if (Object.keys(fromUrl).length > 0) setFilter(initial);
     void fetchOffers(initial, 1);
+    startLiveSearch(initial);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close EventSource on unmount
@@ -193,8 +194,7 @@ export default function HomePage() {
     void fetchOffers(newFilter, 1);
   };
 
-  const handleLiveSearch = () => {
-    // Cancel any previous live search
+  const startLiveSearch = useCallback((f: UIFilter) => {
     liveAbortRef.current?.abort();
     liveAbortRef.current = new AbortController();
 
@@ -203,17 +203,16 @@ export default function HomePage() {
     setLiveStatus('loading');
 
     const params = new URLSearchParams();
-    if (filter.destinations.length) params.set('destinations', filter.destinations.join(','));
-    if (filter.airports.length) params.set('airports', filter.airports.join(','));
-    if (filter.boardTypes.length) params.set('boardTypes', filter.boardTypes.join(','));
-    params.set('dateFrom', filter.dateFrom);
-    params.set('dateTo', filter.dateTo);
-    params.set('nightsMin', filter.nightsMin.toString());
-    params.set('nightsMax', filter.nightsMax.toString());
-    params.set('adults', filter.adults.toString());
+    if (f.destinations.length) params.set('destinations', f.destinations.join(','));
+    if (f.airports.length) params.set('airports', f.airports.join(','));
+    if (f.boardTypes.length) params.set('boardTypes', f.boardTypes.join(','));
+    params.set('dateFrom', f.dateFrom);
+    params.set('dateTo', f.dateTo);
+    params.set('nightsMin', f.nightsMin.toString());
+    params.set('nightsMax', f.nightsMax.toString());
+    params.set('adults', f.adults.toString());
 
     const evtSource = new EventSource(`/api/live-search?${params.toString()}`);
-    liveAbortRef.current = new AbortController();
     liveAbortRef.current.signal.addEventListener('abort', () => evtSource.close());
 
     evtSource.onmessage = (e) => {
@@ -246,7 +245,9 @@ export default function HomePage() {
       setLiveStatus('done');
       evtSource.close();
     };
-  };
+  }, []);
+
+  const handleLiveSearch = () => startLiveSearch(filter);
 
   const handleExport = (fmt: 'xlsx' | 'csv') => {
     const params = new URLSearchParams();
@@ -293,225 +294,217 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Results action bar ──────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-              Ładowanie...
-            </div>
-          ) : (
-            <p className="text-sm text-slate-600">
-              <span className="font-semibold text-slate-900">{total.toLocaleString('pl-PL')}</span> ofert w bazie
-              {dataAge && (
-                <span className="ml-2 text-xs text-slate-400">· dane: {dataAge}</span>
-              )}
-            </p>
-          )}
-          {selected.size >= 2 && (
-            <a href={`/compare?ids=${[...selected].slice(0, 5).join(',')}`} className="btn-primary text-xs">
-              Porównaj ({selected.size})
-            </a>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handleLiveSearch}
-            disabled={liveStatus === 'loading'}
-            className="btn-primary text-sm flex items-center gap-2"
-          >
-            {liveStatus === 'loading' ? (
-              <><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />Szukam...</>
-            ) : (
-              <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Szukaj na żywo</>
+      {/* ── Live results (primary source — Wakacje.pl) ─────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+            <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Wakacje.pl — oferty na żywo
+            {liveStatus === 'loading' && (
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-orange-400 border-t-transparent" />
             )}
-          </button>
-          <ScrapeButton />
-          <button onClick={() => handleExport('xlsx')} className="btn-secondary text-xs" disabled={total === 0}>
-            Excel
-          </button>
-          <button onClick={() => handleExport('csv')} className="btn-secondary text-xs" disabled={total === 0}>
-            CSV
-          </button>
-        </div>
-      </div>
-
-      {/* Stale data warning */}
-      {isStale && !loading && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-          <span>⚠</span>
-          <span>
-            Dane mogą być nieaktualne — ostatni scraping <strong>{dataAge}</strong>.
-            Kliknij <em>Szukaj na żywo</em> lub uruchom scraper.
-          </span>
-        </div>
-      )}
-
-      {/* Error state */}
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
-          <button
-            className="ml-3 font-medium underline"
-            onClick={() => fetchOffers(filter, page)}
-          >
-            Spróbuj ponownie
-          </button>
-        </div>
-      )}
-
-      {/* Table */}
-      <OffersTable
-        offers={offers}
-        loading={loading}
-        sortBy={filter.sortBy}
-        sortOrder={filter.sortOrder}
-        onSort={handleSort}
-        selected={selected}
-        onSelectedChange={setSelected}
-        trends={trends}
-      />
-
-      {/* Pagination */}
-      {pages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            className="btn-secondary text-sm"
-            disabled={page <= 1}
-            onClick={() => { setPage(p => p - 1); void fetchOffers(filter, page - 1); }}
-          >
-            ← Poprzednia
-          </button>
-          <span className="text-sm text-slate-600">
-            Strona {page} z {pages}
-          </span>
-          <button
-            className="btn-secondary text-sm"
-            disabled={page >= pages}
-            onClick={() => { setPage(p => p + 1); void fetchOffers(filter, page + 1); }}
-          >
-            Następna →
-          </button>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && !error && offers.length === 0 && (
-        <div className="card p-12 text-center">
-          <div className="text-4xl mb-3">🔍</div>
-          <h3 className="font-semibold text-slate-700 mb-1">Brak wyników</h3>
-          <p className="text-sm text-slate-500">
-            Zmień filtry lub uruchom scraper, aby pobrać nowe oferty.
-          </p>
-          <a href="/history" className="btn-primary mt-4 text-sm inline-flex">
-            Historia scrapów
-          </a>
-        </div>
-      )}
-
-      {/* Live search results */}
-      {liveStatus !== 'idle' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Wyniki na żywo — Itaka + Wakacje.pl
-              {liveStatus === 'loading' && (
-                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+            {liveStatus === 'done' && liveOffers.length > 0 && (
+              <span className="text-xs font-normal text-slate-400">· {liveOffers.length} ofert</span>
+            )}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleLiveSearch}
+              disabled={liveStatus === 'loading'}
+              className="btn-primary text-sm flex items-center gap-2"
+            >
+              {liveStatus === 'loading' ? (
+                <><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />Szukam...</>
+              ) : (
+                <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Odśwież</>
               )}
-            </h2>
-            {liveOffers.length > 0 && (
-              <span className="text-sm text-slate-500">{liveOffers.length} ofert</span>
+            </button>
+            <ScrapeButton />
+          </div>
+        </div>
+
+        {/* Progress chips */}
+        {liveProgress.length > 0 && (
+          <div className="text-xs text-slate-400 flex flex-wrap gap-2">
+            {liveProgress.map((p, i) => (
+              <span key={i} className="bg-slate-100 rounded px-2 py-0.5">{p}</span>
+            ))}
+          </div>
+        )}
+
+        {/* Loading skeleton */}
+        {liveStatus === 'loading' && liveOffers.length === 0 && (
+          <div className="card overflow-hidden animate-pulse">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex gap-4 px-4 py-3 border-b border-slate-100">
+                <div className="h-4 w-48 bg-slate-200 rounded" />
+                <div className="h-4 w-24 bg-slate-200 rounded" />
+                <div className="h-4 w-16 bg-slate-200 rounded ml-auto" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Live offers table */}
+        {liveOffers.length > 0 && (
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
+                  <th className="px-4 py-2 text-left font-medium">Hotel</th>
+                  <th className="px-4 py-2 text-left font-medium">Kraj</th>
+                  <th className="px-3 py-2 text-left font-medium">Operator</th>
+                  <th className="px-3 py-2 text-center font-medium hidden sm:table-cell">Gwiazdy</th>
+                  <th className="px-3 py-2 text-center font-medium hidden sm:table-cell">Wylot</th>
+                  <th className="px-3 py-2 text-center font-medium">Nocy</th>
+                  <th className="px-3 py-2 text-center font-medium">Wyżyw.</th>
+                  <th className="px-4 py-2 text-right font-medium">Cena</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {liveOffers.slice(0, 150).map((o) => (
+                  <tr key={o.id} className="hover:bg-orange-50/30">
+                    <td className="px-4 py-2.5 font-medium text-slate-800 max-w-[180px] truncate">
+                      <a href={o.sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:text-orange-600 hover:underline">
+                        {o.hotelName}
+                      </a>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500 text-xs whitespace-nowrap">{o.destinationRaw}</td>
+                    <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[110px] truncate">
+                      {o.tourOperator || 'Wakacje.pl'}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-amber-400 text-xs hidden sm:table-cell">
+                      {'★'.repeat(Math.min(o.hotelStars, 5))}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-slate-400 text-xs whitespace-nowrap hidden sm:table-cell">
+                      {o.departureDate} · {o.departureAirport}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-slate-500 text-xs">{o.nights}n</td>
+                    <td className="px-3 py-2.5 text-center">
+                      <span className="badge bg-teal-50 text-teal-700 text-[11px] px-1.5 py-0.5">
+                        {o.boardType === 'all-inclusive' ? 'AI' :
+                         o.boardType === 'ultra-all-inclusive' ? 'UAI' :
+                         o.boardType === 'half-board' ? 'HB' :
+                         o.boardType.slice(0, 3).toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <div className="font-bold text-slate-900">
+                        {o.priceTotal.toLocaleString('pl-PL')}
+                        <span className="text-slate-500 font-normal text-xs ml-0.5">zł</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        {o.pricePerPerson.toLocaleString('pl-PL')} /os.
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {liveOffers.length > 150 && (
+              <div className="px-4 py-2 text-xs text-slate-400 border-t border-slate-100 text-center">
+                Pokazano 150 z {liveOffers.length} ofert — odśwież, aby zobaczyć nowe wyniki
+              </div>
             )}
           </div>
+        )}
 
-          {/* Progress log */}
-          {liveProgress.length > 0 && (
-            <div className="text-xs text-slate-400 flex flex-wrap gap-2">
-              {liveProgress.map((p, i) => (
-                <span key={i} className="bg-slate-100 rounded px-2 py-0.5">{p}</span>
-              ))}
+        {liveStatus === 'done' && liveOffers.length === 0 && (
+          <div className="card p-6 text-center text-sm text-slate-500">
+            Brak wyników na żywo dla tych filtrów. Zmień destynacje lub daty i odśwież.
+          </div>
+        )}
+      </div>
+
+      {/* ── DB results (historical archive) ─────────────────────────────── */}
+      <details className="group" open>
+        <summary className="flex items-center justify-between cursor-pointer select-none py-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-700">Archiwum ofert z bazy</span>
+            {loading ? (
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+            ) : (
+              <span className="text-xs text-slate-400">
+                {total.toLocaleString('pl-PL')} ofert
+                {dataAge && <span className="ml-1">· {dataAge}</span>}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {selected.size >= 2 && (
+              <a href={`/compare?ids=${[...selected].slice(0, 5).join(',')}`} className="btn-primary text-xs">
+                Porównaj ({selected.size})
+              </a>
+            )}
+            <button onClick={() => handleExport('xlsx')} className="btn-secondary text-xs" disabled={total === 0}>Excel</button>
+            <button onClick={() => handleExport('csv')} className="btn-secondary text-xs" disabled={total === 0}>CSV</button>
+            <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </summary>
+
+        <div className="mt-3 space-y-3">
+          {/* Stale data warning */}
+          {isStale && !loading && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+              <span>⚠</span>
+              <span>Dane mogą być nieaktualne — ostatni scraping <strong>{dataAge}</strong>.</span>
             </div>
           )}
 
-          {/* Live offers table */}
-          {liveOffers.length > 0 && (
-            <div className="card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
-                    <th className="px-4 py-2 text-left font-medium">Hotel</th>
-                    <th className="px-4 py-2 text-left font-medium">Kraj</th>
-                    <th className="px-3 py-2 text-left font-medium">Operator</th>
-                    <th className="px-3 py-2 text-center font-medium">Gwiazd</th>
-                    <th className="px-3 py-2 text-center font-medium">Wylot</th>
-                    <th className="px-3 py-2 text-center font-medium">Nocy</th>
-                    <th className="px-3 py-2 text-center font-medium">Wyżyw.</th>
-                    <th className="px-4 py-2 text-right font-medium">Cena</th>
-                    <th className="px-3 py-2 text-center font-medium">Źródło</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {liveOffers.slice(0, 100).map((o) => (
-                    <tr key={o.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5 font-medium text-slate-800 max-w-[200px] truncate">
-                        {o.hotelName}
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-500">{o.destinationRaw}</td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[120px] truncate">
-                        {o.tourOperator || (o.providerCode === 'itaka' ? 'Itaka' : 'Wakacje.pl')}
-                      </td>
-                      <td className="px-3 py-2.5 text-center text-slate-500">{'★'.repeat(o.hotelStars)}</td>
-                      <td className="px-3 py-2.5 text-center text-slate-500 whitespace-nowrap">
-                        {o.departureDate} · {o.departureAirport}
-                      </td>
-                      <td className="px-3 py-2.5 text-center text-slate-500">{o.nights}</td>
-                      <td className="px-3 py-2.5 text-center">
-                        <span className="badge bg-teal-50 text-teal-700 text-xs">
-                          {o.boardType === 'all-inclusive' ? 'AI' :
-                           o.boardType === 'ultra-all-inclusive' ? 'UAI' :
-                           o.boardType.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-slate-900 whitespace-nowrap">
-                        {o.priceTotal.toLocaleString('pl-PL')} zł
-                        <div className="text-xs text-slate-400 font-normal">
-                          {o.pricePerPerson.toLocaleString('pl-PL')} / os.
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        <a
-                          href={o.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`text-xs ${o.providerCode === 'wakacjepl' ? 'text-orange-500 hover:text-orange-700' : 'text-blue-500 hover:text-blue-700'}`}
-                        >
-                          {o.providerCode === 'wakacjepl' ? 'Wakacje.pl →' : 'Itaka →'}
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {liveOffers.length > 100 && (
-                <div className="px-4 py-2 text-xs text-slate-400 border-t border-slate-100">
-                  Pokazano 100 z {liveOffers.length} wyników. Kliknij link przy ofercie, aby przejść do Itaka.
-                </div>
-              )}
+          {/* Error state */}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {error}
+              <button className="ml-3 font-medium underline" onClick={() => fetchOffers(filter, page)}>
+                Spróbuj ponownie
+              </button>
             </div>
           )}
 
-          {liveStatus === 'done' && liveOffers.length === 0 && (
-            <div className="card p-6 text-center text-sm text-slate-500">
-              Brak wyników z Itaka dla tych filtrów. Spróbuj zmienić destynacje lub daty.
+          <OffersTable
+            offers={offers}
+            loading={loading}
+            sortBy={filter.sortBy}
+            sortOrder={filter.sortOrder}
+            onSort={handleSort}
+            selected={selected}
+            onSelectedChange={setSelected}
+            trends={trends}
+          />
+
+          {pages > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                className="btn-secondary text-sm"
+                disabled={page <= 1}
+                onClick={() => { setPage(p => p - 1); void fetchOffers(filter, page - 1); }}
+              >
+                ← Poprzednia
+              </button>
+              <span className="text-sm text-slate-600">Strona {page} z {pages}</span>
+              <button
+                className="btn-secondary text-sm"
+                disabled={page >= pages}
+                onClick={() => { setPage(p => p + 1); void fetchOffers(filter, page + 1); }}
+              >
+                Następna →
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && offers.length === 0 && (
+            <div className="card p-12 text-center">
+              <div className="text-4xl mb-3">🔍</div>
+              <h3 className="font-semibold text-slate-700 mb-1">Brak wyników w bazie</h3>
+              <p className="text-sm text-slate-500">Zmień filtry lub sprawdź wyniki na żywo powyżej.</p>
             </div>
           )}
         </div>
-      )}
+      </details>
     </div>
   );
 }

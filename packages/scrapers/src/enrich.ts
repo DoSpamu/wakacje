@@ -16,6 +16,7 @@
 
 import 'dotenv/config';
 import { TripAdvisorEnricher } from './enrichment/TripAdvisorEnricher.js';
+import { BookingReviewEnricher } from './enrichment/BookingReviewEnricher.js';
 import { YouTubeEnricher } from './enrichment/YouTubeEnricher.js';
 import { supabase } from './db/supabase.js';
 import {
@@ -67,9 +68,11 @@ async function main() {
   console.info(`Found ${hotelList.length} hotels to enrich\n`);
 
   const taEnricher = new TripAdvisorEnricher();
+  const bookingEnricher = new BookingReviewEnricher();
   const ytEnricher = new YouTubeEnricher();
 
   await taEnricher.init();
+  await bookingEnricher.init();
 
   let enriched = 0;
   let failed = 0;
@@ -90,7 +93,16 @@ async function main() {
             `     TA: ${result.tripadvisor.overallRating ?? '?'}/5, ${result.tripadvisor.reviewCount ?? 0} opinii`,
           );
         } else {
-          console.info('     TA: brak danych');
+          console.info('     TA: brak danych — próba Booking.com');
+          const bookingResult = await bookingEnricher.enrichHotel(hotel.id, hotel.canonical_name, location);
+          if (bookingResult.booking) {
+            await upsertHotelReviewSummary({ hotelId: hotel.id, ...bookingResult.booking });
+            console.info(
+              `     Booking: ${bookingResult.booking.overallRating ?? '?'}/5, ${bookingResult.booking.reviewCount ?? 0} opinii`,
+            );
+          } else {
+            console.info('     Booking: brak danych');
+          }
         }
 
         if (result.photos.length > 0) {
@@ -115,6 +127,7 @@ async function main() {
     }
   } finally {
     await taEnricher.close();
+    await bookingEnricher.close();
   }
 
   const logs = logger.flushBuffer();
