@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Fragment } from 'react';
+import { useState, useCallback, useEffect, Fragment } from 'react';
 import Link from 'next/link';
 import type { OfferRow } from '@/lib/types';
 import { getScoreClass, formatRating, stars } from '@/lib/scoring';
@@ -24,6 +24,7 @@ interface ReviewSnippet {
 interface ReviewSource {
   source: string;
   overallRating: number | null;
+  reviewCount: number | null;
   reviewSnippets: ReviewSnippet[];
   sentimentTags: string[];
   foodScore: number | null;
@@ -167,6 +168,32 @@ export default function OffersTable({
     setExpandedKeys(next);
   };
 
+  // Auto-load reviews for all visible hotels when offers change
+  useEffect(() => {
+    const missing = [...new Set(
+      offers.map((o) => o.hotel_id).filter((id): id is string => id !== null && !reviewsCache.has(id)),
+    )];
+    if (missing.length === 0) return;
+
+    const batchSize = 20;
+    for (let i = 0; i < missing.length; i += batchSize) {
+      const batch = missing.slice(i, i + batchSize);
+      void fetch(`/api/hotels/reviews?hotel_ids=${batch.join(',')}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { hotels: Record<string, { sources: ReviewSource[] }> } | null) => {
+          if (!data) return;
+          setReviewsCache((prev) => {
+            const next = new Map(prev);
+            for (const [hotelId, hotelData] of Object.entries(data.hotels)) {
+              if (!next.has(hotelId)) next.set(hotelId, hotelData.sources);
+            }
+            return next;
+          });
+        })
+        .catch(() => {});
+    }
+  }, [offers]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggleReviews = useCallback(
     async (hotelId: string) => {
       const next = new Set(expandedHotels);
@@ -274,7 +301,7 @@ export default function OffersTable({
       </div>
 
       {viewMode === 'list' ? (
-        <HotelList groups={groups} trends={trends} />
+        <HotelList groups={groups} trends={trends} reviewsCache={reviewsCache} />
       ) : viewMode === 'cards' ? (
         <HotelCards groups={groups} trends={trends} />
       ) : (
@@ -724,7 +751,11 @@ export default function OffersTable({
 
 // ─── List view (lastminuter.pl style) ────────────────────────────────────────
 
-function HotelList({ groups, trends }: { groups: HotelGroup[]; trends?: Record<string, number> }) {
+function HotelList({ groups, trends, reviewsCache }: {
+  groups: HotelGroup[];
+  trends?: Record<string, number>;
+  reviewsCache: Map<string, ReviewSource[]>;
+}) {
   return (
     <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
       {groups.map((group) => {
@@ -732,6 +763,15 @@ function HotelList({ groups, trends }: { groups: HotelGroup[]; trends?: Record<s
         const trendPct = oldPrice ? ((group.cheapest.price_total - oldPrice) / oldPrice) * 100 : null;
         const airports = [...new Set(group.offers.map((o) => o.departure_airport))];
         const boardLabel = BOARD_LABELS[group.cheapest.board_type] ?? group.cheapest.board_type;
+
+        // Best available review data: prefer TA (already in group), fall back to cache
+        const cached = group.hotelId ? (reviewsCache.get(group.hotelId) ?? []) : [];
+        const bestCached = cached.find((r) => r.overallRating !== null) ?? cached[0];
+        const displayRating = group.taRating ?? bestCached?.overallRating ?? null;
+        const displayFood = group.taFoodScore ?? bestCached?.foodScore ?? null;
+        const displayCount = group.taReviews ?? bestCached?.reviewCount ?? null;
+        const displayTags = (group.taTags?.length ? group.taTags : bestCached?.sentimentTags) ?? [];
+        const reviewSource = group.taRating !== null ? 'TA' : bestCached?.source ?? null;
 
         return (
           <div
@@ -750,17 +790,27 @@ function HotelList({ groups, trends }: { groups: HotelGroup[]; trends?: Record<s
 
             {/* Main content */}
             <div className="flex-1 min-w-0">
-              {/* Headline */}
+              {/* Headline — hotel name links directly to cheapest offer */}
               <div className="font-semibold text-slate-900 leading-snug mb-1 truncate">
                 {group.destDisplay && (
                   <span className="text-slate-400 font-normal">{group.destDisplay}: </span>
                 )}
-                {group.hotelId ? (
-                  <Link href={`/hotels/${group.hotelId}`} className="hover:text-blue-600 hover:underline">
-                    {group.hotelName}
+                <a
+                  href={group.cheapest.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-blue-600 hover:underline"
+                >
+                  {group.hotelName}
+                </a>
+                {group.hotelId && (
+                  <Link
+                    href={`/hotels/${group.hotelId}`}
+                    className="ml-1 text-slate-300 hover:text-slate-500 text-[11px] align-middle"
+                    title="Szczegóły hotelu"
+                  >
+                    ℹ
                   </Link>
-                ) : (
-                  group.hotelName
                 )}
                 {' '}
                 <span className="stars text-xs">{stars(group.hotelStars)}</span>
@@ -781,12 +831,14 @@ function HotelList({ groups, trends }: { groups: HotelGroup[]; trends?: Record<s
                 <span className="inline-flex items-center rounded-full bg-teal-50 text-teal-700 px-2 py-0.5 font-medium">
                   {boardLabel}
                 </span>
-                {group.taRating !== null && (
+                {displayRating !== null && (
                   <span className="text-amber-600 font-semibold">
-                    ★ {formatRating(group.taRating)}
-                    {group.taReviews ? (
-                      <span className="text-slate-400 font-normal ml-0.5">
-                        ({group.taReviews.toLocaleString('pl-PL')})
+                    ★ {formatRating(displayRating)}
+                    {displayCount ? (
+                      <span className="text-slate-400 font-normal ml-0.5 text-[11px]">
+                        ({displayCount >= 1000
+                          ? `${(displayCount / 1000).toFixed(1)}k`
+                          : displayCount})
                       </span>
                     ) : null}
                   </span>
@@ -811,37 +863,42 @@ function HotelList({ groups, trends }: { groups: HotelGroup[]; trends?: Record<s
                   ))}
               </div>
 
-              {/* Review summary — inline, always visible when data present */}
-              {(group.taRating !== null || (group.taTags && group.taTags.length > 0)) && (
+              {/* Review summary — shows TA, Booking or Google data when available */}
+              {(displayRating !== null || displayTags.length > 0) ? (
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs">
-                  {group.taRating !== null && (
+                  {reviewSource && (
+                    <span className="text-[10px] bg-slate-100 text-slate-400 rounded px-1 py-0.5 uppercase tracking-wide">
+                      {reviewSource}
+                    </span>
+                  )}
+                  {displayRating !== null && (
                     <span className="text-amber-600 font-semibold">
-                      ★ {formatRating(group.taRating)}
-                      {group.taReviews ? (
+                      ★ {formatRating(displayRating)}
+                      {displayCount ? (
                         <span className="text-slate-400 font-normal ml-0.5 text-[11px]">
-                          {' '}({group.taReviews >= 1000
-                            ? `${(group.taReviews / 1000).toFixed(1)}k`
-                            : group.taReviews} opinii)
+                          {' '}({displayCount >= 1000
+                            ? `${(displayCount / 1000).toFixed(1)}k`
+                            : displayCount} opinii)
                         </span>
                       ) : null}
                     </span>
                   )}
-                  {group.taFoodScore !== null && (
+                  {displayFood !== null && (
                     <span className={`rounded px-1.5 py-0.5 ${
-                      (group.taFoodScore ?? 0) >= 4.5 ? 'bg-green-50 text-green-700'
-                      : (group.taFoodScore ?? 0) >= 4.0 ? 'bg-lime-50 text-lime-700'
+                      (displayFood ?? 0) >= 4.5 ? 'bg-green-50 text-green-700'
+                      : (displayFood ?? 0) >= 4.0 ? 'bg-lime-50 text-lime-700'
                       : 'bg-amber-50 text-amber-700'
                     }`}>
-                      🍽 {formatRating(group.taFoodScore)}
+                      🍽 {formatRating(displayFood)}
                     </span>
                   )}
-                  {group.taTags?.slice(0, 3).map((tag) => (
+                  {displayTags.slice(0, 3).map((tag) => (
                     <span key={tag} className="bg-slate-100 text-slate-500 rounded px-1.5 py-0.5">
                       {tag}
                     </span>
                   ))}
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Price column */}

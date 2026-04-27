@@ -30,7 +30,7 @@ export interface HotelReviewData {
 /** GET /api/hotels/reviews?hotel_ids=id1,id2,id3 */
 export async function GET(req: NextRequest) {
   const rawIds = req.nextUrl.searchParams.get('hotel_ids') ?? '';
-  const hotelIds = rawIds.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+  const hotelIds = rawIds.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50);
 
   if (hotelIds.length === 0) {
     return NextResponse.json({ hotels: {} });
