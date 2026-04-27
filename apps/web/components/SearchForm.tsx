@@ -284,6 +284,24 @@ export default function SearchForm({ defaultFilter, onSearch }: Props) {
                   </select>
                 </div>
               </div>
+
+              {/* Min review count */}
+              <div>
+                <label className="label">Min. liczba recenzji TA</label>
+                <select
+                  className="input"
+                  value={filter.minReviewCount ?? ''}
+                  onChange={(e) =>
+                    set('minReviewCount', e.target.value ? parseInt(e.target.value, 10) : undefined)
+                  }
+                >
+                  <option value="">Dowolna</option>
+                  <option value="50">50+</option>
+                  <option value="200">200+</option>
+                  <option value="500">500+</option>
+                  <option value="1000">1000+</option>
+                </select>
+              </div>
             </div>
           </div>
 

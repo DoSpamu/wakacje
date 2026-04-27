@@ -69,6 +69,8 @@ export async function GET(req: NextRequest) {
   if (minTaRating) query = query.gte('tripadvisor_rating', parseFloat(minTaRating));
   const minFoodScore = sp.get('minFoodScore');
   if (minFoodScore) query = query.gte('tripadvisor_food_score', parseFloat(minFoodScore));
+  const minReviewCount = sp.get('minReviewCount');
+  if (minReviewCount) query = query.gte('tripadvisor_reviews', parseInt(minReviewCount, 10));
 
   // Sorting
   const sortBy = sp.get('sortBy') ?? 'composite_score';
@@ -104,11 +106,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Fetch historical min prices for trend arrows (prices from >22h ago vs current)
+  const hotelIds = [...new Set((data ?? []).map((r) => (r as Record<string, unknown>)['hotel_id']).filter(Boolean) as string[])];
+  const trends: Record<string, number> = {};
+
+  if (hotelIds.length > 0) {
+    const cutoff = new Date(Date.now() - 22 * 3600 * 1000).toISOString();
+    const { data: histData } = await supabase
+      .from('offers')
+      .select('hotel_id, price_total')
+      .in('hotel_id', hotelIds)
+      .lte('scraped_at', cutoff);
+
+    for (const row of histData ?? []) {
+      const hid = String((row as Record<string, unknown>)['hotel_id']);
+      const price = (row as Record<string, unknown>)['price_total'] as number;
+      if (!trends[hid] || price < trends[hid]) trends[hid] = price;
+    }
+  }
+
   return NextResponse.json({
     data: data ?? [],
     total: count ?? 0,
     page,
     pageSize,
     pages: Math.ceil((count ?? 0) / pageSize),
+    trends,
   });
 }

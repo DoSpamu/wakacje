@@ -40,6 +40,7 @@ function parseFilterFromUrl(sp: URLSearchParams): Partial<UIFilter> {
   if (providers?.length) out.providers = providers;
   if (sp.get('minTaRating')) out.minTaRating = parseFloat(sp.get('minTaRating')!);
   if (sp.get('minFoodScore')) out.minFoodScore = parseFloat(sp.get('minFoodScore')!);
+  if (sp.get('minReviewCount')) out.minReviewCount = parseInt(sp.get('minReviewCount')!, 10);
   if (sp.get('sortBy')) out.sortBy = sp.get('sortBy')!;
   if (sp.get('sortOrder')) out.sortOrder = sp.get('sortOrder') as 'asc' | 'desc';
   return out;
@@ -60,6 +61,7 @@ function filterToUrlParams(f: UIFilter): URLSearchParams {
   if (f.providers?.length) p.set('providers', f.providers.join(','));
   if (f.minTaRating) p.set('minTaRating', f.minTaRating.toString());
   if (f.minFoodScore) p.set('minFoodScore', f.minFoodScore.toString());
+  if (f.minReviewCount) p.set('minReviewCount', f.minReviewCount.toString());
   p.set('sortBy', f.sortBy);
   p.set('sortOrder', f.sortOrder);
   return p;
@@ -84,6 +86,8 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dataAge, setDataAge] = useState<string>('');
+  const [isStale, setIsStale] = useState(false);
+  const [trends, setTrends] = useState<Record<string, number>>({});
 
   // Live search state
   const [liveOffers, setLiveOffers] = useState<LiveOffer[]>([]);
@@ -116,6 +120,7 @@ export default function HomePage() {
       if (f.providers?.length) params.set('providers', f.providers.join(','));
       if (f.minTaRating) params.set('minTaRating', f.minTaRating.toString());
       if (f.minFoodScore) params.set('minFoodScore', f.minFoodScore.toString());
+      if (f.minReviewCount) params.set('minReviewCount', f.minReviewCount.toString());
       params.set('sortBy', f.sortBy);
       params.set('sortOrder', f.sortOrder);
       params.set('page', p.toString());
@@ -128,18 +133,22 @@ export default function HomePage() {
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        const json = await res.json() as { data: OfferRow[]; total: number; page: number; pages: number };
+        const json = await res.json() as { data: OfferRow[]; total: number; page: number; pages: number; trends: Record<string, number> };
         setOffers(json.data);
         setTotal(json.total);
         setPage(json.page);
         setPages(json.pages);
+        setTrends(json.trends ?? {});
 
         // Compute data freshness from newest scraped_at
         const newestAt = (json.data ?? []).reduce<string>(
           (max, o) => (o.scraped_at > max ? o.scraped_at : max),
           '',
         );
-        if (newestAt) setDataAge(formatAge(newestAt));
+        if (newestAt) {
+          setDataAge(formatAge(newestAt));
+          setIsStale(Date.now() - new Date(newestAt).getTime() > 24 * 3_600_000);
+        }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           setError(err instanceof Error ? err.message : 'Błąd ładowania danych');
@@ -346,6 +355,17 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Stale data warning */}
+      {isStale && !loading && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          <span>⚠</span>
+          <span>
+            Dane mogą być nieaktualne — ostatni scraping <strong>{dataAge}</strong>.
+            Kliknij <em>Szukaj na żywo</em> lub uruchom scraper.
+          </span>
+        </div>
+      )}
+
       {/* Error state */}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -368,6 +388,7 @@ export default function HomePage() {
         onSort={handleSort}
         selected={selected}
         onSelectedChange={setSelected}
+        trends={trends}
       />
 
       {/* Pagination */}

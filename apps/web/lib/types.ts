@@ -61,6 +61,7 @@ export interface UIFilter {
   providers?: string[];
   minTaRating?: number;
   minFoodScore?: number;
+  minReviewCount?: number;
   sortBy: string;
   sortOrder: 'asc' | 'desc';
 }

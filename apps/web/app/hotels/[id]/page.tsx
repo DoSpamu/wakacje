@@ -4,6 +4,7 @@ import { createServerClient } from '@/lib/supabase';
 import { formatRating, stars, getScoreClass } from '@/lib/scoring';
 import PriceHistoryChart, { type PricePoint } from '@/components/PriceHistoryChart';
 import PriceAlertForm from '@/components/PriceAlertForm';
+import BackButton from '@/components/BackButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -192,7 +193,7 @@ export default async function HotelPage({ params }: Props) {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
-          <a href="/" className="hover:underline">Szukaj</a>
+          <BackButton />
           <span>/</span>
           <span>{dest?.display_name}</span>
         </div>

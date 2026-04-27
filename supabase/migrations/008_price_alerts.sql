@@ -13,9 +13,10 @@ CREATE TABLE IF NOT EXISTS price_alerts (
 CREATE UNIQUE INDEX IF NOT EXISTS price_alerts_email_hotel_idx ON price_alerts(email, hotel_id);
 CREATE INDEX IF NOT EXISTS price_alerts_hotel_id_idx ON price_alerts(hotel_id);
 
--- RLS: users can only see/delete their own alerts (by email)
+-- RLS: service role has full access
 ALTER TABLE price_alerts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access" ON price_alerts;
 CREATE POLICY "Service role full access" ON price_alerts
   FOR ALL USING (true)
   WITH CHECK (true);
