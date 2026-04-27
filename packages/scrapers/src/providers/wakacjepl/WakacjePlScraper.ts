@@ -57,9 +57,24 @@ export class WakacjePlScraper extends BaseScraper {
     }
   }
 
-  protected async goToNextPage(_page: Page): Promise<boolean> {
-    // SSR-only approach: the initial page carries 10 offers per destination.
-    // Pagination via the thor.wakacje.pl API endpoint is not yet implemented.
-    return false;
+  protected async goToNextPage(page: Page): Promise<boolean> {
+    const currentUrl = page.url();
+    try {
+      const url = new URL(currentUrl);
+      // Matches: /wczasy/{slug}/ or /wczasy/{slug}/strona/{N}/
+      const m = url.pathname.match(/^(\/wczasy\/[^/]+)(?:\/strona\/(\d+))?\/?$/);
+      if (!m) return false;
+
+      const basePath = m[1]!;
+      const currentPage = m[2] ? parseInt(m[2], 10) : 1;
+      const nextUrl = `${url.origin}${basePath}/strona/${currentPage + 1}/${url.search}`;
+
+      logger.info(`Navigating to page ${currentPage + 1}`, { url: nextUrl }, 'wakacjepl');
+      await page.goto(nextUrl, { waitUntil: 'load', timeout: 30_000 });
+      return true;
+    } catch (err) {
+      logger.warn('Pagination navigation failed', { error: String(err), url: currentUrl }, 'wakacjepl');
+      return false;
+    }
   }
 }

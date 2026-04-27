@@ -17,12 +17,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pl" className={inter.variable}>
       <body>
-        <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
+        <header className="sticky top-0 z-50 border-b border-slate-100 bg-white/95 backdrop-blur-sm shadow-sm">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex h-14 items-center justify-between">
               {/* Logo */}
-              <a href="/" className="flex items-center gap-2 font-bold text-blue-600 text-lg">
-                <span className="text-2xl">✈</span>
+              <a href="/" className="flex items-center gap-2 font-bold text-blue-600 text-lg hover:text-blue-700 transition-colors">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 text-white text-base">✈</span>
                 <span>Wakacje</span>
               </a>
 

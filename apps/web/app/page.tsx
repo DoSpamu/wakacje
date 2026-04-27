@@ -266,46 +266,36 @@ export default function HomePage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Page title */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Szukaj ofert wakacyjnych</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            All-Inclusive z R.pl, Exim Tours, Itaka, Grecos, TUI i Wakacje.pl
-          </p>
+    <div className="space-y-5">
+
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
+      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-sky-500 px-6 pt-7 pb-5 shadow-xl">
+        {/* Decorative plane */}
+        <div className="absolute -top-4 right-4 text-[160px] leading-none opacity-[0.07] select-none pointer-events-none rotate-12">
+          ✈
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleLiveSearch}
-            disabled={liveStatus === 'loading'}
-            className="btn-primary text-sm flex items-center gap-2"
-            title="Pobierz oferty bezpośrednio z Itaka teraz (bez czekania na cron)"
-          >
-            {liveStatus === 'loading' ? (
-              <>
-                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Szukam...
-              </>
-            ) : (
-              <>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Szukaj na żywo
-              </>
-            )}
-          </button>
-          <ScrapeButton />
+        {/* Decorative circles */}
+        <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full bg-white/5 -translate-x-1/2 translate-y-1/2 pointer-events-none" />
+        <div className="absolute top-0 right-1/3 w-32 h-32 rounded-full bg-white/5 -translate-y-1/2 pointer-events-none" />
+
+        <div className="relative z-10">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1 leading-tight">
+            Znajdź idealne wczasy
+          </h1>
+          <p className="text-blue-100 text-sm mb-5">
+            Porównaj all-inclusive z Itaka, TUI, Grecos, Wakacje.pl i innych biur podróży
+          </p>
+
+          {/* Search form on white card */}
+          <div className="bg-white rounded-2xl p-4 shadow-2xl">
+            <SearchForm defaultFilter={DEFAULT_FILTER} onSearch={handleSearch} />
+          </div>
         </div>
       </div>
 
-      {/* Search form */}
-      <SearchForm defaultFilter={DEFAULT_FILTER} onSearch={handleSearch} />
-
-      {/* Results header */}
+      {/* ── Results action bar ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-slate-500">
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
@@ -313,43 +303,36 @@ export default function HomePage() {
             </div>
           ) : (
             <p className="text-sm text-slate-600">
-              Znaleziono <span className="font-semibold text-slate-900">{total.toLocaleString('pl-PL')}</span> ofert
+              <span className="font-semibold text-slate-900">{total.toLocaleString('pl-PL')}</span> ofert w bazie
               {dataAge && (
-                <span className="ml-2 text-xs text-slate-400" title="Wiek najnowszej oferty w wynikach">
-                  · dane: {dataAge}
-                </span>
-              )}
-              {selected.size > 0 && (
-                <span className="ml-2 text-blue-600">
-                  ({selected.size} zaznaczonych)
-                </span>
+                <span className="ml-2 text-xs text-slate-400">· dane: {dataAge}</span>
               )}
             </p>
           )}
-
           {selected.size >= 2 && (
-            <a
-              href={`/compare?ids=${[...selected].slice(0, 5).join(',')}`}
-              className="btn-primary text-xs"
-            >
+            <a href={`/compare?ids=${[...selected].slice(0, 5).join(',')}`} className="btn-primary text-xs">
               Porównaj ({selected.size})
             </a>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => handleExport('xlsx')}
-            className="btn-secondary text-xs"
-            disabled={total === 0}
+            onClick={handleLiveSearch}
+            disabled={liveStatus === 'loading'}
+            className="btn-primary text-sm flex items-center gap-2"
           >
-            Excel (.xlsx)
+            {liveStatus === 'loading' ? (
+              <><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />Szukam...</>
+            ) : (
+              <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Szukaj na żywo</>
+            )}
           </button>
-          <button
-            onClick={() => handleExport('csv')}
-            className="btn-secondary text-xs"
-            disabled={total === 0}
-          >
+          <ScrapeButton />
+          <button onClick={() => handleExport('xlsx')} className="btn-secondary text-xs" disabled={total === 0}>
+            Excel
+          </button>
+          <button onClick={() => handleExport('csv')} className="btn-secondary text-xs" disabled={total === 0}>
             CSV
           </button>
         </div>

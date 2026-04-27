@@ -139,7 +139,7 @@ export default function OffersTable({
   onSelectedChange,
   trends,
 }: Props) {
-  const [viewMode, setViewMode] = useState<'grouped' | 'cards' | 'flat'>('grouped');
+  const [viewMode, setViewMode] = useState<'grouped' | 'cards' | 'flat' | 'list'>('list');
   const [groupSort, setGroupSort] = useState<'default' | 'price_per_night' | 'rating'>('default');
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [expandedHotels, setExpandedHotels] = useState<Set<string>>(new Set());
@@ -258,8 +258,8 @@ export default function OffersTable({
         {/* View mode toggle */}
         <div className="flex items-center gap-2">
           <span className="text-slate-400">Widok:</span>
-          {(['grouped', 'cards', 'flat'] as const).map((mode) => {
-            const label = mode === 'grouped' ? 'Tabela' : mode === 'cards' ? 'Karty' : 'Wszystkie';
+          {(['list', 'cards', 'grouped', 'flat'] as const).map((mode) => {
+            const label = mode === 'list' ? 'Lista' : mode === 'grouped' ? 'Tabela' : mode === 'cards' ? 'Karty' : 'Wszystkie';
             return (
               <button
                 key={mode}
@@ -273,7 +273,9 @@ export default function OffersTable({
         </div>
       </div>
 
-      {viewMode === 'cards' ? (
+      {viewMode === 'list' ? (
+        <HotelList groups={groups} trends={trends} />
+      ) : viewMode === 'cards' ? (
         <HotelCards groups={groups} trends={trends} />
       ) : (
       <div className="card overflow-x-auto">
@@ -719,6 +721,125 @@ export default function OffersTable({
     </div>
   );
 }
+
+// ─── List view (lastminuter.pl style) ────────────────────────────────────────
+
+function HotelList({ groups, trends }: { groups: HotelGroup[]; trends?: Record<string, number> }) {
+  return (
+    <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+      {groups.map((group) => {
+        const oldPrice = group.hotelId ? (trends?.[group.hotelId] ?? null) : null;
+        const trendPct = oldPrice ? ((group.cheapest.price_total - oldPrice) / oldPrice) * 100 : null;
+        const airports = [...new Set(group.offers.map((o) => o.departure_airport))];
+        const boardLabel = BOARD_LABELS[group.cheapest.board_type] ?? group.cheapest.board_type;
+
+        return (
+          <div
+            key={group.key}
+            className="flex items-center gap-4 px-4 py-3.5 hover:bg-blue-50/30 transition-colors"
+          >
+            {/* Thumbnail */}
+            <div className="flex-shrink-0 w-[72px] h-[56px] rounded-lg overflow-hidden bg-gradient-to-br from-blue-50 to-slate-200">
+              {group.hotelPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={group.hotelPhotoUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-2xl opacity-20 select-none">🏨</div>
+              )}
+            </div>
+
+            {/* Main content */}
+            <div className="flex-1 min-w-0">
+              {/* Headline */}
+              <div className="font-semibold text-slate-900 leading-snug mb-1 truncate">
+                {group.destDisplay && (
+                  <span className="text-slate-400 font-normal">{group.destDisplay}: </span>
+                )}
+                {group.hotelId ? (
+                  <Link href={`/hotels/${group.hotelId}`} className="hover:text-blue-600 hover:underline">
+                    {group.hotelName}
+                  </Link>
+                ) : (
+                  group.hotelName
+                )}
+                {' '}
+                <span className="stars text-xs">{stars(group.hotelStars)}</span>
+              </div>
+
+              {/* Tag pills */}
+              <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                {airports.slice(0, 4).map((ap) => (
+                  <span key={ap} className="inline-flex items-center gap-0.5 text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
+                    ✈ {ap}
+                  </span>
+                ))}
+                <span className="text-slate-400">
+                  {group.nightsMin === group.nightsMax
+                    ? `${group.nightsMin} nocy`
+                    : `${group.nightsMin}–${group.nightsMax} nocy`}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-teal-50 text-teal-700 px-2 py-0.5 font-medium">
+                  {boardLabel}
+                </span>
+                {group.taRating !== null && (
+                  <span className="text-amber-600 font-semibold">
+                    ★ {formatRating(group.taRating)}
+                    {group.taReviews ? (
+                      <span className="text-slate-400 font-normal ml-0.5">
+                        ({group.taReviews.toLocaleString('pl-PL')})
+                      </span>
+                    ) : null}
+                  </span>
+                )}
+              </div>
+
+              {/* Provider badges */}
+              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                {group.providers
+                  .sort((a, b) => a.price - b.price)
+                  .slice(0, 4)
+                  .map((p) => (
+                    <a
+                      key={p.code}
+                      href={group.offers.find((o) => o.id === p.offerId)?.source_url ?? '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`${PROVIDER_COLORS[p.code] ?? 'badge bg-slate-100 text-slate-600'} text-xs`}
+                    >
+                      {p.name.length > 8 ? p.code.toUpperCase() : p.name} →
+                    </a>
+                  ))}
+              </div>
+            </div>
+
+            {/* Price column */}
+            <div className="flex-shrink-0 text-right min-w-[110px]">
+              {trendPct !== null && Math.abs(trendPct) >= 3 && (
+                <div className={`text-xs font-semibold mb-0.5 ${trendPct < 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {trendPct < 0 ? '↓' : '↑'}{Math.abs(Math.round(trendPct))}%
+                </div>
+              )}
+              <div className="text-xl font-bold text-slate-900 leading-none">
+                {group.cheapest.price_total.toLocaleString('pl-PL')}
+                <span className="text-sm font-medium text-slate-500 ml-1">zł</span>
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                {group.cheapest.price_per_person.toLocaleString('pl-PL')} zł/os.
+              </div>
+              {group.compositeScore !== null && (
+                <div className="mt-1 flex justify-end">
+                  <span className={getScoreClass(group.compositeScore)}>{group.compositeScore}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Card view ────────────────────────────────────────────────────────────────
 
 function HotelCards({ groups, trends }: { groups: HotelGroup[]; trends?: Record<string, number> }) {
   return (

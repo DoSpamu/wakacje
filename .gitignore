@@ -39,3 +39,4 @@ Thumbs.db
 # Scraper spy/debug tools (local only)
 packages/scrapers/src/spy-*.ts
 packages/scrapers/spy-*.json
+.playwright-mcp/

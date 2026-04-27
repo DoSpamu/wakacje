@@ -49,6 +49,18 @@ function computeReturnDate(departureDate: string, nights: number): string {
   }
 }
 
+/** Extract the best available photo URL from wakacje.pl photos map */
+function extractPhotoUrl(photos: unknown): string | undefined {
+  if (!photos || typeof photos !== 'object') return undefined;
+  const p = photos as AnyObj;
+  // Prefer larger sizes first
+  const arr: unknown = p['570,428'] ?? p['400,300'] ?? p['160,120'];
+  if (!Array.isArray(arr) || arr.length === 0) return undefined;
+  const first = arr[0];
+  if (typeof first !== 'string') return undefined;
+  return `https://www.wakacje.pl${first}`;
+}
+
 /** Parse a single raw offer object from wakacje.pl __NEXT_DATA__ */
 export function parseWakacjePlOffer(raw: AnyObj, sourceUrl: string): RawOffer | null {
   try {
@@ -74,6 +86,18 @@ export function parseWakacjePlOffer(raw: AnyObj, sourceUrl: string): RawOffer | 
     const priceTotal = price;
     const pricePerPerson = adults > 0 ? Math.round(priceTotal / adults) : priceTotal;
 
+    const imageUrl = extractPhotoUrl(raw.photos);
+
+    const rawData: Record<string, unknown> = {
+      tourOperatorName: raw.tourOperatorName ? String(raw.tourOperatorName) : null,
+      tourOpCode: raw.tourOpCode ? String(raw.tourOpCode) : null,
+      ratingValue: raw.ratingValue != null ? Number(raw.ratingValue) : null,
+      ratingRecommends: raw.ratingRecommends != null ? Number(raw.ratingRecommends) : null,
+      wakacjePlHotelId: raw.hotelId ? String(raw.hotelId) : null,
+      urlName: raw.urlName ? String(raw.urlName) : null,
+    };
+    if (imageUrl) rawData['imageUrl'] = imageUrl;
+
     const offer: RawOffer = {
       providerCode: 'wakacjepl',
       providerOfferId: String(raw.offerId ?? raw.id ?? ''),
@@ -92,6 +116,8 @@ export function parseWakacjePlOffer(raw: AnyObj, sourceUrl: string): RawOffer | 
       adults,
       children: Number(raw.children ?? 0),
       sourceUrl,
+      imageUrl,
+      rawData,
     };
 
     return offer;

@@ -50,12 +50,6 @@ const DEST_MAP: Record<string, string> = {
   montenegro: 'czarnogora',
 };
 
-// --- URL Builder ---
-
-function buildUrl(slug: string): string {
-  return `${BASE_URL}/${slug}/?all-inclusive&src=fromFilters`;
-}
-
 // --- HTTP Fetch ---
 
 async function fetchHtml(url: string): Promise<string> {
@@ -176,7 +170,15 @@ function parseHtml(html: string, slug: string, sourceUrl: string): WakacjePlLive
     .filter((o): o is WakacjePlLiveOffer => o !== null);
 }
 
-// --- Per-destination fetch ---
+// --- Per-destination fetch (multi-page) ---
+
+const LIVE_PAGE_COUNT = 4; // fetch 4 pages = ~40 offers per destination
+
+function buildPageUrl(slug: string, page: number): string {
+  return page === 1
+    ? `${BASE_URL}/${slug}/?all-inclusive&src=fromFilters`
+    : `${BASE_URL}/${slug}/strona/${page}/?all-inclusive&src=fromFilters`;
+}
 
 async function searchWakacjePlDestination(
   canonical: string,
@@ -184,10 +186,26 @@ async function searchWakacjePlDestination(
   const slug = DEST_MAP[canonical];
   if (!slug) return { offers: [], error: `Unknown destination: ${canonical}` };
 
-  const url = buildUrl(slug);
+  const urls = Array.from({ length: LIVE_PAGE_COUNT }, (_, i) => buildPageUrl(slug, i + 1));
+
   try {
-    const html = await fetchHtml(url);
-    const offers = parseHtml(html, slug, url);
+    const results = await Promise.allSettled(urls.map((u) => fetchHtml(u)));
+
+    const seen = new Set<string>();
+    const offers: WakacjePlLiveOffer[] = [];
+
+    for (let i = 0; i < results.length; i++) {
+      const res = results[i]!;
+      if (res.status !== 'fulfilled') continue;
+      for (const offer of parseHtml(res.value, slug, urls[i]!)) {
+        const key = `${offer.hotelName}|${offer.departureDate}|${offer.priceTotal}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          offers.push(offer);
+        }
+      }
+    }
+
     return { offers };
   } catch (err) {
     return { offers: [], error: String(err) };
